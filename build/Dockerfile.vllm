@@ -1,0 +1,117 @@
+ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.01-py3
+FROM ${BASE_IMAGE}
+
+# ============================================================
+# vllm-next: vLLM latest + CUTLASS 4.3.5 + GLM-4.7 Patches
+# Targets: SM120a (RTX PRO 6000) + SM121a (DGX Spark GB10)
+# EAGLE3 speculative decoding built-in
+#
+# Build:
+#   DGX:      podman build -f Dockerfile.vllm -t vllm-next .
+#   Spiegel2: podman build -f Dockerfile.vllm -t vllm-next .
+# ============================================================
+
+# CUDA Dev-Header (cusparse.h fehlt im Runtime-Image)
+# Braucht CUDA-Keyring fuer apt repo Zugang
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends wget && \
+    ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') && \
+    wget -qO /tmp/cuda-keyring.deb \
+      "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" && \
+    dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+      libcusparse-dev-13-1 \
+      libcusolver-dev-13-1 \
+      libcufft-dev-13-1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build-Dependencies
+RUN pip install --no-cache-dir cmake ninja setuptools-scm
+
+# ============================================================
+# CUTLASS 4.3.5 (SM120a/SM121a Support)
+# ============================================================
+RUN git clone --depth 1 --branch v4.3.5 \
+      https://github.com/NVIDIA/cutlass.git /opt/cutlass
+ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+
+# ============================================================
+# vLLM latest main from source
+# ============================================================
+RUN git clone --depth 1 \
+      https://github.com/vllm-project/vllm.git /tmp/vllm-build
+
+WORKDIR /tmp/vllm-build
+
+# Existierendes PyTorch nutzen (NVIDIA's 2.10.0+cu131)
+RUN python use_existing_torch.py
+
+# Build-Requirements
+RUN pip install --no-cache-dir -r requirements/build.txt
+
+# Altes vLLM entfernen
+RUN pip uninstall -y vllm
+
+# vLLM bauen mit CUTLASS 4.3.5 fuer SM120a + SM121a
+ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+ENV VLLM_TARGET_DEVICE=cuda
+ENV MAX_JOBS=16
+RUN pip install --no-build-isolation --no-cache-dir .
+
+# Aufraeumen
+WORKDIR /
+RUN rm -rf /tmp/vllm-build
+
+# ============================================================
+# GLM-4.7 Dependencies (transformers 5, compressed-tensors)
+# ============================================================
+RUN pip install --no-cache-dir --no-deps "transformers>=5.0" && \
+    pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" && \
+    pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+
+# ============================================================
+# Patch 0: assume_32bit_indexing (PyTorch 2.10.0a0 Bug)
+# PyTorch 2.10.0a0 in NVIDIA images fehlt dieser Config-Key.
+# vLLM setzt ihn → KeyError bei CUDA Graph Capture.
+# Fix: Variable VOR install_config_module() einfuegen.
+# ============================================================
+RUN python3 -c "\
+p = '/usr/local/lib/python3.12/dist-packages/torch/_inductor/config.py'; \
+t = open(p).read(); \
+old = 'install_config_module(sys.modules[__name__])'; \
+new = 'assume_32bit_indexing = True\n\ninstall_config_module(sys.modules[__name__])'; \
+t = t.replace(old, new, 1) if 'assume_32bit_indexing' not in t else t; \
+open(p,'w').write(t); \
+print('Patch 0: assume_32bit_indexing added' if 'assume_32bit_indexing' in open(p).read() else 'Patch 0: FAILED')"
+
+# ============================================================
+# Patches 3,4,7,8,11 (OHNE Patch 10 — CUTLASS 4.3.5 hat SM120/121)
+# ============================================================
+COPY patch_transformers.py /tmp/
+RUN python3 /tmp/patch_transformers.py
+
+# ============================================================
+# Patch streaming (Anthropic adapter tool_calls Fixes)
+# ============================================================
+COPY patch_streaming.py /tmp/
+RUN python3 /tmp/patch_streaming.py
+
+# cv2/typing shadowing fix
+RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+
+# ============================================================
+# MoE Kernel Configs (getunt fuer GB10 + RTX PRO 6000)
+# Merge into existing configs dir (don't replace stock configs!)
+# ============================================================
+COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+
+# ============================================================
+# Verify
+# ============================================================
+RUN python3 -c "\
+import vllm; print('vLLM:', vllm.__version__); \
+import transformers; print('transformers:', transformers.__version__); \
+import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); \
+import torch; print('PyTorch:', torch.__version__); \
+print('CUDA:', torch.version.cuda)"
