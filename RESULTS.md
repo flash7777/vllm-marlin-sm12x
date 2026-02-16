@@ -64,10 +64,23 @@ Matrix: short (20 tok) / medium (150 tok) / long (400 tok) × Kontextlänge.
 | 8,192 | 54 | 80 | 80 |
 | 16,384 | 36 | 53 | 53 |
 
-- **Long ohne Kontext: 309 tok/s** — EAGLE3 profitiert maximal von Thinking-Tokens (hohe Akzeptanz)
-- Medium und Long konvergieren bei 8K+ Kontext (~80 tok/s) — Attention-Last dominiert ab hier
-- Short degradiert linear (106→36 tok/s) — wenig Output, TTFT-Anteil steigt
-- Vergleich llama-benchy (reine Decode, kein Thinking): 143 tok/s @ ctx=0, 47 tok/s @ ctx=16K
+## bench.py vs llama-benchy Vergleich — Spiegel 2 (RTX PRO 6000, SM120)
+
+Gleiche Config: INT4 W4A16 + EAGLE3 NST=3. Nächstliegende Output-Längen verglichen.
+
+| Context | bench.py short (20) | benchy tg=32 | Ratio | bench.py med (150) | benchy tg=128 | Ratio | bench.py long (400) | benchy tg=512 | Ratio |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 106 | 143 | 0.74× | 180 | 143 | 1.26× | 309 | 142 | 2.18× |
+| 512 | 96 | 138 | 0.70× | 171 | 134 | 1.28× | 261 | — | — |
+| 2,048 | 80 | 112 | 0.71× | 142 | 109 | 1.30× | 220 | — | — |
+| 8,192 | 54 | 73 | 0.74× | 80 | 73 | 1.10× | 80 | — | — |
+| 16,384 | 36 | 48 | 0.75× | 53 | 47 | 1.13× | 53 | — | — |
+
+- **Short < benchy (~0.74×)**: Nur 3 echte Tokens generiert (Thinking dominiert), TTFT-Overhead relativ groß
+- **Medium > benchy (~1.25×)**: Thinking-Tokens erhöhen completion_tokens/wall_time, EAGLE3-Akzeptanz bei Thinking hoch
+- **Long >> benchy (2.18×!)**: 400 Output-Tokens = viel Thinking → maximaler EAGLE3-Vorteil bei Thinking-Patterns
+- **Konvergenz bei 8K+**: Beide Tools zeigen ~80 tok/s medium, ~73 tok/s benchy — Attention dominiert, EAGLE3/Thinking irrelevant
+- **llama-benchy** misst reine Decode-Rate (Streaming, kein Thinking), **bench.py** misst completion_tokens/wall_time (inkl. Thinking)
 
 ## Analyse
 
