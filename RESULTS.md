@@ -31,25 +31,6 @@ Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 | BF16 | EAGLE3 | — | — | 147.4 | — |
 | BF16 | — | — | 140.9 | — | — |
 
-## GLM-4.7-Flash — DGX Spark (GB10, SM121, 273 GB/s)
-
-| Quant | Spec | GEMM Kernel | tok/s (med) | tok/s (long) | Math (50) |
-|---|---|---|---:|---:|---:|
-| INT4 W4A16 | — | Marlin FP16 mma.sync | 54.9 | 53.2 | 88% |
-| NVFP4 | — | FlashInfer CUTLASS | 43.1 | 42.0 | 86% |
-| FP8 dynamic | — | Triton MoE | 42.4 | 41.4 | 94% |
-| BF16 | — | — | 27.3 | 26.7 | 94% |
-
-## GLM-4.7-Flash — Spiegel 2 (RTX PRO 6000, SM120, 1800 GB/s)
-
-| Quant | Spec | GEMM Kernel | tok/s (med) | tok/s (long) | Math (50) | Image |
-|---|---|---|---:|---:|---:|---|
-| INT4 W4A16 | — | Marlin FP16 mma.sync | 167.2 | 161.1 | 88% | vllm-glm |
-| INT4 W4A8 | — | Marlin FP8 mma.sync k=32 | 167.5 | 161.5 | 88% | vllm-glm |
-| NVFP4 | — | FlashInfer CUTLASS | 157.9 | — | 74%* | vllm-next |
-| FP8 dynamic | — | Triton MoE | 135.7 | — | — | vllm-next |
-| BF16 | — | — | 140.9 | — | — | vllm-next |
-
 ## Analyse
 
 ### INT4 AutoRound ist schnellste Quantisierung auf DGX Spark
