@@ -1,6 +1,9 @@
 # Benchmark-Ergebnisse: Marlin INT4 AutoRound auf SM120/SM121
 
-Alle Messungen mit `bench.py` (deterministic, seed=42, temperature=0).
+Zwei Benchmark-Tools:
+- **bench.py**: End-to-end mit echten Prompts + Math-Accuracy (deterministic, seed=42, temperature=0)
+- **[llama-benchy](https://github.com/eugr/llama-benchy)**: Prefill (pp) vs Decode (tg) isoliert bei verschiedenen Kontextlängen
+
 Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 
 ## Qwen3-Coder-30B-A3B — DGX Spark (GB10, SM121, 273 GB/s)
@@ -30,6 +33,20 @@ Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 | FP8 dynamic | — | Triton MoE | 135.7 | — | — |
 | BF16 | EAGLE3 | — | — | 147.4 | — |
 | BF16 | — | — | 140.9 | — | — |
+
+## llama-benchy: Prefill vs Decode — Spiegel 2 (RTX PRO 6000, SM120)
+
+Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, llama-benchy 0.3.1, runs=2.
+
+| Prompt (pp) | Prefill (tok/s) | Decode tg=32 (tok/s) | Decode tg=128 (tok/s) | TTFT (ms) |
+|---:|---:|---:|---:|---:|
+| 512 | 16,181 ± 1,330 | 137.5 ± 3.6 | 133.9 ± 0.3 | 30 |
+| 2,048 | 23,333 ± 74 | 112.2 ± 2.2 | 108.5 ± 0.0 | 76 |
+| 8,192 | 22,632 ± 44 | 73.4 ± 0.3 | 72.7 ± 0.3 | 305 |
+
+- Prefill: ~23K tok/s, nicht der Bottleneck
+- Decode degradiert mit Kontextlänge: 137→73 tok/s (512→8K pp) — KV-Cache Attention wird teurer
+- TTFT: 30ms (512 tok) bis 305ms (8K tok)
 
 ## Analyse
 
