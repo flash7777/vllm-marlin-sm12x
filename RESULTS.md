@@ -24,7 +24,7 @@ Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 
 | Quant | Spec | GEMM Kernel | tok/s (med) | tok/s (long) | Math (50) |
 |---|---|---|---:|---:|---:|
-| **INT4 W4A16** | **EAGLE3 NST=3** | **Marlin FP16 mma.sync** | **178.0** | **298.2** | **78%** |
+| **INT4 W4A16** | **EAGLE3 NST=3** | **Marlin FP16 mma.sync** | **179.7** | **303.1** | **78%** |
 | INT4 W4A16 | — | Marlin FP16 mma.sync | 210.5 | 211.7 | 78% |
 | INT4 W4A8 | — | Marlin FP8 mma.sync k=32 | 210.5 | 211.8 | 78% |
 | NVFP4 | EAGLE3 | FlashInfer CUTLASS | — | 183.4 | — |
@@ -57,11 +57,11 @@ Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, `bench.py --context`, tg=128, runs=2.
 
 | Context | bench.py (tok/s) | llama-benchy (tok/s) | Verhältnis |
 |---:|---:|---:|---:|
-| 0 | 218.2 | 143 | 1.53× |
-| 512 | 207.2 | 134 | 1.55× |
-| 2,048 | 174.0 | 109 | 1.60× |
-| 8,192 | 78.5 | 73 | 1.08× |
-| 16,384 | 50.7 | 47 | 1.08× |
+| 0 | 207.6 | 143 | 1.45× |
+| 512 | 203.8 | 134 | 1.52× |
+| 2,048 | 171.0 | 109 | 1.57× |
+| 8,192 | 82.8 | 73 | 1.13× |
+| 16,384 | 53.7 | 47 | 1.14× |
 
 - Bei kurzem Kontext: bench.py ~1.5× höher — EAGLE3 profitiert von Thinking-Tokens (vorhersagbar, hohe Akzeptanz)
 - Bei langem Kontext: Beide konvergieren (~1.08×) — Attention dominiert, EAGLE3-Vorteil schwindet
@@ -76,8 +76,8 @@ Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, `bench.py --context`, tg=128, runs=2.
 
 ### INT4 + EAGLE3 = Bestwert auf Spiegel 2
 
-- **298.2 tok/s** (long) — neuer Bestwert für Qwen3-Coder auf RTX PRO 6000
-- +41% vs INT4 Vanilla (211.7), +63% vs NVFP4+EAGLE3 (183.4)
+- **303.1 tok/s** (long) — neuer Bestwert für Qwen3-Coder auf RTX PRO 6000
+- +43% vs INT4 Vanilla (211.7), +65% vs NVFP4+EAGLE3 (183.4)
 
 ### W4A8 = kein Speedup bei Batch=1
 
