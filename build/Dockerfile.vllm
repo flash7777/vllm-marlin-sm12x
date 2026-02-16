@@ -44,6 +44,13 @@ RUN git clone --depth 1 \
 
 WORKDIR /tmp/vllm-build
 
+# ============================================================
+# Marlin SM121 Patch (SM12x family support for W4A8-FP8)
+# Fixes: marlin.cu == 120 → == 12, marlin_utils.py capability_family
+# ============================================================
+COPY marlin_sm12x.patch /tmp/
+RUN git apply /tmp/marlin_sm12x.patch || echo "Patch already applied or not needed"
+
 # Existierendes PyTorch nutzen (NVIDIA's 2.10.0+cu131)
 RUN python use_existing_torch.py
 
