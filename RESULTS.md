@@ -38,15 +38,18 @@ Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 
 Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, llama-benchy 0.3.1, runs=2.
 
-| Prompt (pp) | Prefill (tok/s) | Decode tg=32 (tok/s) | Decode tg=128 (tok/s) | TTFT (ms) |
-|---:|---:|---:|---:|---:|
-| 512 | 16,181 ± 1,330 | 137.5 ± 3.6 | 133.9 ± 0.3 | 30 |
-| 2,048 | 23,333 ± 74 | 112.2 ± 2.2 | 108.5 ± 0.0 | 76 |
-| 8,192 | 22,632 ± 44 | 73.4 ± 0.3 | 72.7 ± 0.3 | 305 |
+| Prompt (pp) | Prefill (tok/s) | Decode tg=32 (tok/s) | Decode tg=128 (tok/s) | Decode tg=512 (tok/s) | TTFT (ms) |
+|---:|---:|---:|---:|---:|---:|
+| 1 (zero) | 69 | 143.1 ± 1.1 | 142.6 ± 0.5 | 141.6 ± 0.1 | 15 |
+| 512 | 16,181 ± 1,330 | 137.5 ± 3.6 | 133.9 ± 0.3 | — | 30 |
+| 2,048 | 23,333 ± 74 | 112.2 ± 2.2 | 108.5 ± 0.0 | — | 76 |
+| 8,192 | 22,632 ± 44 | 73.4 ± 0.3 | 72.7 ± 0.3 | — | 305 |
+| 16,384 | 17,103 ± 86 | 47.5 ± 0.2 | 47.0 ± 0.3 | — | 850 |
 
+- **Zero-Context Decode: 143 tok/s** — reine Marlin+EAGLE3 Geschwindigkeit ohne Attention-Last
+- Decode degradiert mit Kontextlänge: 143→73→47 tok/s (0→8K→16K pp) — KV-Cache Attention dominiert
 - Prefill: ~23K tok/s, nicht der Bottleneck
-- Decode degradiert mit Kontextlänge: 137→73 tok/s (512→8K pp) — KV-Cache Attention wird teurer
-- TTFT: 30ms (512 tok) bis 305ms (8K tok)
+- TTFT: 15ms (zero) bis 305ms (8K tok)
 
 ## Analyse
 
