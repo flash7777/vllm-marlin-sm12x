@@ -53,19 +53,21 @@ Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, llama-benchy 0.3.1, runs=2.
 
 ## bench.py Context-Scaling — Spiegel 2 (RTX PRO 6000, SM120)
 
-Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, `bench.py --context`, tg=128, runs=2.
+Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, `bench.py --context`, runs=2.
+Matrix: short (20 tok) / medium (150 tok) / long (400 tok) × Kontextlänge.
 
-| Context | bench.py (tok/s) | llama-benchy (tok/s) | Verhältnis |
+| Context | short (tok/s) | medium (tok/s) | long (tok/s) |
 |---:|---:|---:|---:|
-| 0 | 207.6 | 143 | 1.45× |
-| 512 | 203.8 | 134 | 1.52× |
-| 2,048 | 171.0 | 109 | 1.57× |
-| 8,192 | 82.8 | 73 | 1.13× |
-| 16,384 | 53.7 | 47 | 1.14× |
+| 0 | 106 | 180 | 309 |
+| 512 | 96 | 171 | 261 |
+| 2,048 | 80 | 142 | 220 |
+| 8,192 | 54 | 80 | 80 |
+| 16,384 | 36 | 53 | 53 |
 
-- Bei kurzem Kontext: bench.py ~1.5× höher — EAGLE3 profitiert von Thinking-Tokens (vorhersagbar, hohe Akzeptanz)
-- Bei langem Kontext: Beide konvergieren (~1.08×) — Attention dominiert, EAGLE3-Vorteil schwindet
-- llama-benchy misst reine Decode-Rate (Streaming), bench.py misst completion_tokens/wall_time (inkl. Thinking)
+- **Long ohne Kontext: 309 tok/s** — EAGLE3 profitiert maximal von Thinking-Tokens (hohe Akzeptanz)
+- Medium und Long konvergieren bei 8K+ Kontext (~80 tok/s) — Attention-Last dominiert ab hier
+- Short degradiert linear (106→36 tok/s) — wenig Output, TTFT-Anteil steigt
+- Vergleich llama-benchy (reine Decode, kein Thinking): 143 tok/s @ ctx=0, 47 tok/s @ ctx=16K
 
 ## Analyse
 
