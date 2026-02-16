@@ -18,6 +18,10 @@ Prompts (fix):
 
 Math (deterministic, seed=42):
   50 zufaellige Aufgaben (+, -, *) mit Zahlen 10-999, temperature=0
+
+Context scaling (optional, --context):
+  Decode throughput at 0/512/2K/8K/16K input context tokens
+  Vergleichbar mit llama-benchy --pp/--tg Messungen
 """
 import argparse
 import json
@@ -75,6 +79,52 @@ def perf_test(url, model, n=5):
         print(f"  {label:8s}: {avg_toks:6.1f} tok/s  ({avg_tok:.0f} tok in {avg_time:.2f}s, n={n})")
     return results
 
+def context_test(url, model, contexts=None, tg=128, n=2):
+    """Run decode throughput tests at varying context lengths (like llama-benchy)."""
+    if contexts is None:
+        contexts = [0, 512, 2048, 8192, 16384]
+
+    # Build filler text: deterministic lorem-style padding
+    random.seed(42)
+    words = ("the quick brown fox jumps over a lazy dog near the river bank while "
+             "clouds drift slowly across the wide blue sky and birds sing softly in "
+             "the tall green trees beside the old stone wall that runs along ").split()
+
+    results = []
+    for ctx in contexts:
+        # Build context prompt: filler text of ~ctx tokens (rough: 1 word ≈ 1.3 tokens)
+        if ctx <= 0:
+            filler = ""
+            prompt = f"Continue writing a story about a fox. Write exactly {tg} words."
+        else:
+            n_words = int(ctx / 1.3)
+            filler_words = []
+            for i in range(n_words):
+                filler_words.append(words[i % len(words)])
+            filler = " ".join(filler_words)
+            prompt = (f"Here is some context:\n\n{filler}\n\n"
+                      f"Now continue writing this story. Write exactly {tg} words.")
+
+        times = []
+        tokens_list = []
+        for run in range(n):
+            _, tokens, elapsed = chat(url, model, prompt, max_tokens=tg + 50, temperature=0)
+            times.append(elapsed)
+            tokens_list.append(tokens)
+
+        avg_tok = sum(tokens_list) / len(tokens_list)
+        avg_time = sum(times) / len(times)
+        avg_toks = avg_tok / avg_time if avg_time > 0 else 0
+        results.append({
+            "context": ctx,
+            "avg_tokens": avg_tok,
+            "avg_time_s": round(avg_time, 2),
+            "avg_tok_s": round(avg_toks, 1),
+        })
+        print(f"  ctx={ctx:>6d}: {avg_toks:6.1f} tok/s  ({avg_tok:.0f} tok in {avg_time:.2f}s, n={n})")
+    return results
+
+
 def math_test(url, model, n=50):
     """Run math accuracy tests."""
     random.seed(42)
@@ -127,6 +177,10 @@ def main():
     parser.add_argument("--math-count", type=int, default=50)
     parser.add_argument("--skip-math", action="store_true")
     parser.add_argument("--skip-perf", action="store_true")
+    parser.add_argument("--context", action="store_true", help="Run context-scaling test (decode at 0/512/2K/8K/16K)")
+    parser.add_argument("--context-sizes", type=int, nargs="+", default=[0, 512, 2048, 8192, 16384])
+    parser.add_argument("--context-tg", type=int, default=128, help="Tokens to generate per context test")
+    parser.add_argument("--context-rounds", type=int, default=2)
     args = parser.parse_args()
 
     print(f"\n{'='*60}")
@@ -143,6 +197,12 @@ def main():
     if not args.skip_math:
         print(f"\n--- Math Accuracy (n={args.math_count}) ---")
         results["math"] = math_test(args.url, args.model, args.math_count)
+
+    if args.context:
+        print(f"\n--- Context Scaling (tg={args.context_tg}, n={args.context_rounds}) ---")
+        results["context"] = context_test(
+            args.url, args.model, args.context_sizes,
+            args.context_tg, args.context_rounds)
 
     print(f"\n{'='*60}")
     # Output JSON for programmatic use
