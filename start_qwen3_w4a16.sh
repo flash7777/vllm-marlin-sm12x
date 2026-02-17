@@ -1,7 +1,19 @@
 #!/bin/bash
 # Qwen3-Coder-30B INT4 AutoRound — W4A16 (BF16 activations, Marlin default)
+#
+# DGX Spark: --gpu-memory-utilization 0.33 --kv-cache-memory-bytes 10G
+# Spiegel 2: --gpu-memory-utilization 0.90
 MODEL=/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound
 NAME=vllm-qwen3-i4ar-w4a16
+
+# Detect platform
+if [[ "$(hostname)" == *"dgx"* ]] || [[ "$(uname -m)" == "aarch64" ]]; then
+  GPU_MEM="--gpu-memory-utilization 0.33 --kv-cache-memory-bytes 10G"
+  echo "Platform: DGX Spark (unified memory workaround)"
+else
+  GPU_MEM="--gpu-memory-utilization 0.90"
+  echo "Platform: Spiegel 2"
+fi
 
 podman stop $NAME 2>/dev/null; podman rm $NAME 2>/dev/null
 
@@ -20,7 +32,7 @@ podman run -d \
     --host 0.0.0.0 \
     --port 8000 \
     --served-model-name qwen3-coder-30b-int4 \
-    --gpu-memory-utilization 0.90 \
+    $GPU_MEM \
     --max-model-len 32768 \
     --trust-remote-code \
     --quantization auto_round
