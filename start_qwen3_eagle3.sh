@@ -13,7 +13,7 @@ NAME=vllm-qwen3-i4ar-eagle3
 HOSTNAME=$(hostname)
 if [[ "$HOSTNAME" == *"dgx"* ]] || [[ "$(uname -m)" == "aarch64" ]]; then
   NST=1
-  GPU_MEM="--gpu-memory-utilization 0.33 --kv-cache-memory-bytes 10G"
+  GPU_MEM="--gpu-memory-utilization 0.05 --kv-cache-memory-bytes 10G"
   echo "Platform: DGX Spark (NST=$NST, unified memory workaround)"
 else
   NST=3

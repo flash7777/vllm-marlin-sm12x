@@ -8,7 +8,7 @@ NAME=vllm-qwen3-i4ar-w4a16
 
 # Detect platform
 if [[ "$(hostname)" == *"dgx"* ]] || [[ "$(uname -m)" == "aarch64" ]]; then
-  GPU_MEM="--gpu-memory-utilization 0.33 --kv-cache-memory-bytes 10G"
+  GPU_MEM="--gpu-memory-utilization 0.05 --kv-cache-memory-bytes 10G"
   echo "Platform: DGX Spark (unified memory workaround)"
 else
   GPU_MEM="--gpu-memory-utilization 0.90"
