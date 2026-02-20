@@ -1,0 +1,48 @@
+#!/bin/bash
+# PP=2 MiniMax-M2.5 INT4 AutoRound: vLLM Serve (auf DGX, exec in Head-Container)
+# Head und Worker müssen bereits laufen und Ray Cluster gebildet haben.
+#
+# Reihenfolge:
+#   1. DGX:  ./start.minimax_pp2.head
+#   2. PGX:  ./start.minimax_pp2.worker
+#   3. DGX:  ./start.minimax_pp2.serve  <-- DU BIST HIER
+
+set -euo pipefail
+
+CONTAINER_NAME="minimax-head"
+MODEL_PATH="/data/tensordata/MiniMax-M2.5-int4-AutoRound/MiniMax-M2.5-w4g128"
+PORT=8011
+LOGFILE="/tmp/minimax-serve.log"
+
+echo "=== Ray Cluster Status prüfen ==="
+podman exec "$CONTAINER_NAME" ray status
+echo ""
+
+echo "=== vLLM serve starten (PP=2, Hintergrund) ==="
+echo "Modell:  $MODEL_PATH"
+echo "Port:    $PORT (direkt, --network host)"
+echo "PP=2:    62 Layer, ~31 pro Node"
+echo ""
+
+nohup podman exec "$CONTAINER_NAME" \
+  vllm serve "$MODEL_PATH" \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --served-model-name minimax-m2.5 \
+    --tensor-parallel-size 1 \
+    --pipeline-parallel-size 2 \
+    --distributed-executor-backend ray \
+    --gpu-memory-utilization 0.05 \
+    --kv-cache-memory-bytes 10G \
+    --max-model-len 16384 \
+    --trust-remote-code \
+    --quantization auto_round \
+    --disable-log-requests \
+  > "$LOGFILE" 2>&1 &
+
+SERVE_PID=$!
+echo "vLLM serve gestartet (PID: $SERVE_PID)"
+echo "Logs: tail -f $LOGFILE"
+echo ""
+echo "Warte auf Modell-Laden (~5 Min)..."
+echo "Health-Check: curl http://localhost:$PORT/health"

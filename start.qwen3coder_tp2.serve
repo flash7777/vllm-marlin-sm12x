@@ -1,0 +1,39 @@
+#!/bin/bash
+# TP=2 Qwen3-Coder-30B-A3B INT4 AutoRound: vLLM Serve (vanilla)
+# Tensor Parallelism: Jeder Layer auf 2 GPUs aufgeteilt
+
+set -euo pipefail
+
+CONTAINER_NAME="qwen3coder-head"
+MODEL_PATH="/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound"
+PORT=8011
+LOGFILE="/tmp/qwen3coder-tp2-serve.log"
+
+echo "=== Ray Cluster Status pruefen ==="
+podman exec "$CONTAINER_NAME" ray status
+echo ""
+
+echo "=== vLLM serve starten (TP=2, vanilla) ==="
+echo "Modell:  $MODEL_PATH"
+echo "Port:    $PORT"
+echo ""
+
+nohup podman exec "$CONTAINER_NAME" \
+  vllm serve "$MODEL_PATH" \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --served-model-name qwen3-coder \
+    --tensor-parallel-size 2 \
+    --distributed-executor-backend ray \
+    --gpu-memory-utilization 0.05 \
+    --kv-cache-memory-bytes 10G \
+    --max-model-len 16384 \
+    --trust-remote-code \
+    --quantization auto_round \
+    --disable-log-requests \
+  > "$LOGFILE" 2>&1 &
+
+SERVE_PID=$!
+echo "vLLM serve gestartet (PID: $SERVE_PID)"
+echo "Logs: tail -f $LOGFILE"
+echo "Health-Check: curl http://localhost:$PORT/health"

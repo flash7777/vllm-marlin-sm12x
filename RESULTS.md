@@ -34,6 +34,55 @@ Image: `vllm-next` (vLLM 26.01 base, CUTLASS 4.3.5, SM120a/SM121a).
 | BF16 | EAGLE3 | — | — | 147.4 | — |
 | BF16 | — | — | 140.9 | — | — |
 
+## Multi-Node: DGX Spark + PGX ThinkStation (2× GB10, SM121, RoCE)
+
+Zwei identische GB10-Knoten ueber ConnectX-7 QSFP56 200 Gbps mit RoCE (RDMA over Converged Ethernet).
+NCCL Transport: `NET/IB : Using [0]rocep1s0f0:1/RoCE` (~5-10μs Latenz vs ~200-500μs TCP Socket).
+
+### Qwen3-Coder-30B-A3B INT4 AutoRound — Multi-Node
+
+| Modus | Socket (tok/s) | RoCE (tok/s) | Speedup | Anmerkung |
+|---|---:|---:|---:|---|
+| PP=2 | 70.4 | 71.3 | +1% | Pipeline-Bubble ist Bottleneck, nicht Netzwerk |
+| TP=2 | 45.3 | **91.6** | **+102%** | Schneller als Single-Node vanilla (86.9)! |
+| EP=2 | 35.0 | **85.5** | **+144%** | |
+| TP=2 + EAGLE3 NST=1 | 60.0 | **94.8** | +58% | Crasht ab 8K Context |
+
+### MiniMax-M2.5 INT4 AutoRound — Multi-Node
+
+| Modus | Socket (tok/s) | RoCE (tok/s) | Speedup |
+|---|---:|---:|---:|
+| PP=2 | 29.0 | 29.0 | 0% |
+| TP=2 | 22.4 | **41.7** | **+86%** |
+| EP=2 | 25.9 | **38.7** | +49% |
+
+### Context-Matrix: Qwen3-Coder TP=2 RoCE (tok/s)
+
+| | ctx=0 | ctx=512 | ctx=2K | ctx=8K | ctx=16K |
+|------|---:|---:|---:|---:|---:|
+| short | 91.6 | 91.5 | 88.1 | 81.3 | 73.5 |
+| medium | 91.6 | 91.5 | 88.1 | 81.3 | 73.5 |
+| long | 91.6 | 91.5 | 88.1 | 81.3 | 73.5 |
+
+### Context-Matrix: MiniMax-M2.5 TP=2 RoCE (tok/s)
+
+| | ctx=0 | ctx=512 | ctx=2K | ctx=8K | ctx=16K |
+|------|---:|---:|---:|---:|---:|
+| short | 39.2 | 38.0 | 36.2 | 30.3 | 25.2 |
+| medium | 41.7 | 40.2 | 38.5 | 32.3 | 26.2 |
+| long | 41.7 | 40.2 | 38.5 | 32.3 | 26.2 |
+
+### RoCE Container-Flags
+
+```bash
+--device /dev/infiniband/uverbs0
+--device /dev/infiniband/rdma_cm
+-e NCCL_IB_DISABLE=0
+-e NCCL_IB_HCA=rocep1s0f0
+```
+
+Details: [BENCHMARK_MULTINODE.md](BENCHMARK_MULTINODE.md)
+
 ## llama-benchy: Prefill vs Decode — Spiegel 2 (RTX PRO 6000, SM120)
 
 Qwen3-Coder-30B INT4 W4A16 + EAGLE3 NST=3, llama-benchy 0.3.1, runs=2.

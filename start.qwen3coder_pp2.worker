@@ -1,0 +1,72 @@
+#!/bin/bash
+# PP=2 Qwen3-Coder-30B-A3B INT4 AutoRound: Ray WORKER Node (PGX ThinkStation)
+# Startet Ray Worker Container auf PGX. Head muss bereits laufen.
+#
+# Reihenfolge:
+#   1. DGX:  ./start.qwen3coder_pp2.head
+#   2. PGX:  ./start.qwen3coder_pp2.worker  <-- DU BIST HIER
+#   3. DGX:  ./start.qwen3coder_pp2.serve
+
+set -euo pipefail
+
+CONTAINER_NAME="qwen3coder-worker"
+IMAGE="localhost/vllm-next"
+HEAD_IP="192.168.0.117"
+WORKER_IP="192.168.0.116"
+CX7_IF="enp1s0f0np0"
+
+echo "=== Ray WORKER Node starten (PGX ThinkStation) ==="
+echo "Worker-IP: $WORKER_IP"
+echo "Head-IP:   $HEAD_IP:6379"
+echo "Interface: $CX7_IF"
+echo ""
+
+# Alten Container aufraeumen
+podman stop "$CONTAINER_NAME" 2>/dev/null || true
+podman rm "$CONTAINER_NAME" 2>/dev/null || true
+podman system migrate 2>/dev/null || true
+
+# WORKAROUND: nohup + foreground-Modus noetig wegen Podman 4.9.3/Kernel 6.17
+# Container verliert sonst Prozess-Tracking nach ~10s (Created-Bug)
+nohup podman run \
+  --name "$CONTAINER_NAME" \
+  --network host \
+  --ipc=host \
+  --device nvidia.com/gpu=all \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --security-opt=label=disable \
+  -v /data/tensordata:/data/tensordata \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -e VLLM_HOST_IP="$WORKER_IP" \
+  -e NCCL_SOCKET_IFNAME="$CX7_IF" \
+  -e GLOO_SOCKET_IFNAME="$CX7_IF" \
+  -e TP_SOCKET_IFNAME="$CX7_IF" \
+  -e UCX_NET_DEVICES="$CX7_IF" \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_DEBUG=INFO \
+  -e RAY_memory_monitor_refresh_ms=0 \
+  -e VLLM_MLA_DISABLE=1 \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  "$IMAGE" \
+  ray start --block --num-gpus=1 --num-cpus=20 \
+    --address="$HEAD_IP:6379" --node-ip-address="$WORKER_IP" \
+  > /tmp/qwen3coder-worker.log 2>&1 &
+
+sleep 5
+
+if podman ps | grep -q "$CONTAINER_NAME"; then
+  echo ""
+  echo "Container '$CONTAINER_NAME' laeuft."
+  echo "Worker verbindet sich mit Head $HEAD_IP:6379"
+  echo ""
+  echo "Naechster Schritt: Auf DGX vLLM serve starten"
+  echo "  ./start.qwen3coder_pp2.serve"
+  echo ""
+  echo "Logs: tail -f /tmp/qwen3coder-worker.log"
+else
+  echo "FEHLER: Container nicht gestartet!"
+  tail -10 /tmp/qwen3coder-worker.log
+  exit 1
+fi

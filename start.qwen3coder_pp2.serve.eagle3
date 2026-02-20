@@ -1,0 +1,52 @@
+#!/bin/bash
+# PP=2 Qwen3-Coder-30B-A3B INT4 AutoRound + EAGLE3: vLLM Serve
+# Head und Worker muessen bereits laufen und Ray Cluster gebildet haben.
+#
+# Reihenfolge:
+#   1. DGX:  ./start.qwen3coder_pp2.head
+#   2. PGX:  ./start.qwen3coder_pp2.worker
+#   3. DGX:  ./start.qwen3coder_pp2.serve.eagle3  <-- DU BIST HIER
+
+set -euo pipefail
+
+CONTAINER_NAME="qwen3coder-head"
+MODEL_PATH="/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound"
+EAGLE_PATH="/data/tensordata/SGLang-EAGLE3-Qwen3-Coder-30B-A3B"
+PORT=8011
+LOGFILE="/tmp/qwen3coder-eagle3-serve.log"
+
+echo "=== Ray Cluster Status pruefen ==="
+podman exec "$CONTAINER_NAME" ray status
+echo ""
+
+echo "=== vLLM serve starten (PP=2, EAGLE3) ==="
+echo "Modell:   $MODEL_PATH"
+echo "Drafter:  $EAGLE_PATH"
+echo "Port:     $PORT"
+echo "PP=2:     48 Layer, ~24 pro Node"
+echo "NST=1:    Optimal fuer DGX (bandwidth-limited)"
+echo ""
+
+nohup podman exec "$CONTAINER_NAME" \
+  vllm serve "$MODEL_PATH" \
+    --host 0.0.0.0 \
+    --port "$PORT" \
+    --served-model-name qwen3-coder \
+    --tensor-parallel-size 1 \
+    --pipeline-parallel-size 2 \
+    --distributed-executor-backend ray \
+    --gpu-memory-utilization 0.05 \
+    --kv-cache-memory-bytes 10G \
+    --max-model-len 16384 \
+    --trust-remote-code \
+    --quantization auto_round \
+    --speculative-config='{"model":"'"$EAGLE_PATH"'","num_speculative_tokens":1,"method":"eagle3"}' \
+    --disable-log-requests \
+  > "$LOGFILE" 2>&1 &
+
+SERVE_PID=$!
+echo "vLLM serve gestartet (PID: $SERVE_PID)"
+echo "Logs: tail -f $LOGFILE"
+echo ""
+echo "Warte auf Modell-Laden (~3 Min)..."
+echo "Health-Check: curl http://localhost:$PORT/health"

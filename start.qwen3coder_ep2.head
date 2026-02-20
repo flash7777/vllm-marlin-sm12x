@@ -1,0 +1,59 @@
+#!/bin/bash
+# EP=2 Qwen3-Coder-30B-A3B INT4 AutoRound: Ray HEAD Node (DGX Spark)
+# Expert Parallelism: 128 Experts auf 2 GPUs verteilt (64 pro Node)
+#
+# Reihenfolge:
+#   1. DGX:  ./start.qwen3coder_ep2.head
+#   2. PGX:  ./start.qwen3coder_ep2.worker
+#   3. DGX:  ./start.qwen3coder_ep2.serve
+
+set -euo pipefail
+
+CONTAINER_NAME="qwen3coder-head"
+IMAGE="localhost/vllm-next"
+HEAD_IP="192.168.0.117"
+CX7_IF="enp1s0f0np0"
+
+echo "=== Ray HEAD Node starten (DGX Spark) ==="
+echo "Head-IP:   $HEAD_IP"
+echo "Interface: $CX7_IF"
+echo ""
+
+# Alten Container aufraeumen
+podman stop "$CONTAINER_NAME" 2>/dev/null || true
+podman rm "$CONTAINER_NAME" 2>/dev/null || true
+
+podman run -d \
+  --name "$CONTAINER_NAME" \
+  --network host \
+  --ipc=host \
+  --device nvidia.com/gpu=all \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  -v /data/tensordata:/data/tensordata \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -e VLLM_HOST_IP="$HEAD_IP" \
+  -e NCCL_SOCKET_IFNAME="$CX7_IF" \
+  -e GLOO_SOCKET_IFNAME="$CX7_IF" \
+  -e TP_SOCKET_IFNAME="$CX7_IF" \
+  -e UCX_NET_DEVICES="$CX7_IF" \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_DEBUG=INFO \
+  -e RAY_memory_monitor_refresh_ms=0 \
+  -e VLLM_MLA_DISABLE=1 \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  "$IMAGE" \
+  ray start --block --head --num-gpus=1 --num-cpus=20 \
+    --node-ip-address="$HEAD_IP" --port=6379
+
+echo ""
+echo "Container '$CONTAINER_NAME' gestartet."
+echo "Ray Head:  $HEAD_IP:6379"
+echo ""
+echo "Naechster Schritt: Worker auf PGX starten"
+echo "  ssh flash@192.168.0.116 'cd ~/dgx-spark/serving/vllm && ./start.qwen3coder_ep2.worker'"
+echo ""
+echo "Logs: podman logs -f $CONTAINER_NAME"
