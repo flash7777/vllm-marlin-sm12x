@@ -66,7 +66,7 @@ struct NumericConverter<float_e2m1_t, float, Round> {
 
   CUTLASS_HOST_DEVICE
   static result_type convert(source_type const & v) {
-    float av = fabsf(v);
+    float av = (v < 0.0f) ? -v : v;
 
     // Branchless magnitude computation via threshold comparisons.
     // Thresholds are midpoints between adjacent E2M1 representable values:
@@ -77,8 +77,9 @@ struct NumericConverter<float_e2m1_t, float, Round> {
         (av > 0.25f) + (av >= 0.75f) + (av > 1.25f) +
         (av >= 1.75f) + (av > 2.5f) + (av >= 3.5f) + (av > 5.0f));
 
-    // Extract sign bit from IEEE-754 float (bit 31) into E2M1 sign position (bit 3)
-    uint32_t sign = (__float_as_uint(v) >> 28) & 0x8u;
+    // Sign bit: v < 0 sets bit 3 (E2M1 sign position)
+    // Pure arithmetic — no __float_as_uint needed (HOST_DEVICE safe)
+    uint8_t sign = (v < 0.0f) ? 0x8u : 0x0u;
 
     return float_e2m1_t::bitcast(static_cast<uint8_t>(sign | mag));
   }
