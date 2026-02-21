@@ -2,13 +2,14 @@ ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.01-py3
 FROM ${BASE_IMAGE}
 
 # ============================================================
-# vllm-next: vLLM latest + CUTLASS 4.3.5 + GLM-4.7 Patches
+# vllm-next2: vLLM latest + CUTLASS 4.3.5 + Branchless E2M1
 # Targets: SM120a (RTX PRO 6000) + SM121a (DGX Spark GB10)
-# EAGLE3 speculative decoding built-in
+# EAGLE3 + MTP speculative decoding built-in
+# Branchless E2M1 NumericConverter for SM121 NVFP4 performance
 #
 # Build:
-#   DGX:      podman build -f Dockerfile.vllm -t vllm-next .
-#   Spiegel2: podman build -f Dockerfile.vllm -t vllm-next .
+#   DGX:      podman build -f Dockerfile.next2 -t vllm-next2 .
+#   Spiegel2: podman build -f Dockerfile.next2 -t vllm-next2 .
 # ============================================================
 
 # CUDA Dev-Header (cusparse.h fehlt im Runtime-Image)
@@ -35,6 +36,21 @@ RUN pip install --no-cache-dir cmake ninja setuptools-scm
 RUN git clone --depth 1 --branch v4.3.5 \
       https://github.com/NVIDIA/cutlass.git /opt/cutlass
 ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+
+# ============================================================
+# CUTLASS SM121 E2M1 Patches (next2: branchless software fallback)
+# ============================================================
+# SM121 lacks cvt.rn.satfinite.e2m1x2.f32 PTX instruction.
+# Patch 1: Remove SM121 from CUDA_PTX_FP4FP6_CVT_ENABLED guard
+#          so SM121 uses software E2M1 instead of failing at ptxas.
+# Patch 2: Replace generic exmy_base.h (~40 SASS) with branchless
+#          NumericConverter specialization (~14 SASS) for E2M1.
+# SM120 continues using hardware PTX (unaffected).
+# ============================================================
+COPY patch_cutlass_float_subbyte_sm121.py /tmp/
+RUN python3 /tmp/patch_cutlass_float_subbyte_sm121.py
+COPY patch_numeric_conversion_e2m1_branchless.py /tmp/
+RUN python3 /tmp/patch_numeric_conversion_e2m1_branchless.py
 
 # ============================================================
 # vLLM latest main from source
