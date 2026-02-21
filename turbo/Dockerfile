@@ -281,7 +281,7 @@ RUN chmod +x /workspace/dgx-vllm-build/cmake_patch_gb10_nvfp4_v6_full_kernels.sh
 # CUDA_PTX_FP4FP6_CVT_ENABLED so CUTLASS falls back to C++ software E2M1
 # (exmy_base.h). Needed for dual-arch build (sm_120a + sm_121a).
 # ============================================================================
-RUN git clone --depth 1 --branch v4.3.5 \
+RUN git clone --depth 1 --branch v4.2.1 \
       https://github.com/NVIDIA/cutlass.git /opt/cutlass
 COPY patch_cutlass_float_subbyte_sm121.py /workspace/dgx-vllm-build/patch_cutlass_float_subbyte_sm121.py
 RUN python3 /workspace/dgx-vllm-build/patch_cutlass_float_subbyte_sm121.py
