@@ -142,12 +142,76 @@ Pseudocode der convert() Funktion (~200 Zeilen Template):
 \* An exakten Mittelpunkten (0.75, 1.75, 3.5) kann turbo/turbo2 um 1 ULP von
 round-to-nearest-even abweichen. Bei FP4 mit 8 Werten praktisch irrelevant.
 
+### 4. next2 (Branchless NumericConverter-Spezialisierung fuer CUTLASS 4.3.5)
+
+Statt den generischen exmy_base.h Fallback zu nutzen, wird eine Template-Spezialisierung
+von `NumericConverter<float_e2m1_t, float, Round>` direkt in `numeric_conversion.h`
+eingefuegt. Ersetzt den gesamten exmy_base.h Pfad fuer E2M1 durch die branchless Methode.
+
+```cpp
+// Quelle: patch_numeric_conversion_e2m1_branchless.py
+// Eingefuegt in numeric_conversion.h vor den NumericArrayConverter-Spezialisierungen
+
+#if !defined(CUDA_PTX_FP4FP6_CVT_ENABLED)
+
+template <FloatRoundStyle Round>
+struct NumericConverter<float_e2m1_t, float, Round> {
+  using result_type = float_e2m1_t;
+  using source_type = float;
+  static FloatRoundStyle const round_style = Round;
+
+  CUTLASS_HOST_DEVICE
+  static result_type convert(source_type const & v) {
+    float av = fabsf(v);
+    uint8_t mag = static_cast<uint8_t>(
+        (av > 0.25f) + (av >= 0.75f) + (av > 1.25f) +
+        (av >= 1.75f) + (av > 2.5f) + (av >= 3.5f) + (av > 5.0f));
+    uint32_t sign = (__float_as_uint(v) >> 28) & 0x8u;
+    return float_e2m1_t::bitcast(static_cast<uint8_t>(sign | mag));
+  }
+
+  CUTLASS_HOST_DEVICE
+  result_type operator()(source_type const &s) const {
+    return convert(s);
+  }
+};
+
+#endif // !CUDA_PTX_FP4FP6_CVT_ENABLED
+```
+
+**Eigenschaften:**
+- Alle Eigenschaften von turbo2 (0 Branches, ~14 SASS, branchless)
+- Wirkt auf **alle** CUTLASS NumericArrayConverter #else-Pfade (N=2,4,8,N)
+- Keine Aenderung an nvfp4_utils.cuh noetig — nur CUTLASS intern
+- Nutzt CUTLASS Template-Konvention (`NumericConverter` Spezialisierung)
+- `#if !defined(CUDA_PTX_FP4FP6_CVT_ENABLED)` Guard — SM120a nutzt weiter HW PTX
+- Fuer CUTLASS v4.3.5 (vllm-next). Nicht fuer v4.2.1 (turbo/turbo2) noetig.
+
+## Vergleichstabelle
+
+| Eigenschaft | turbo (Avarok) | turbo2 (Branchless) | CUTLASS exmy_base | next2 (NumConv) |
+|---|---|---|---|---|
+| **Ansatz** | Spezialisiert | Spezialisiert | Generisch | Spezialisiert |
+| **Branches** | 7 if-else | **0** | ~8 + while | **0** |
+| **SASS (geschaetzt)** | ~14 | ~14 | ~40+ | ~14 |
+| **Warp-Divergenz** | Compiler-abhaengig | **Garantiert keine** | Ja (while, if) | **Garantiert keine** |
+| **Rounding** | Nearest | Nearest | Nearest-**even** | Nearest |
+| **Latenz** | ~7 Zyklen | ~7 Zyklen | ~20+ Zyklen | ~7 Zyklen |
+| **Codegroesse** | 20 Zeilen | 8 Zeilen | ~200 Zeilen | 15 Zeilen |
+| **Formate** | Nur E2M1 | Nur E2M1 | Alle ExMy | Nur E2M1 |
+| **IEEE-konform** | Annaehernd* | Annaehernd* | **Formal korrekt** | Annaehernd* |
+| **Patcht** | nvfp4_utils.cuh | nvfp4_utils.cuh | (eingebaut) | numeric_conversion.h |
+| **CUTLASS-Version** | v4.2.1 | v4.2.1 | alle | v4.3.5 |
+
+\* An exakten Mittelpunkten (0.75, 1.75, 3.5) kann turbo/turbo2/next2 um 1 ULP von
+round-to-nearest-even abweichen. Bei FP4 mit 8 Werten praktisch irrelevant.
+
 ## Wo wird was genutzt?
 
 | Pfad | SM120a (HW PTX) | SM121a (SW Fallback) |
 |---|---|---|
 | vLLM `nvfp4_utils.cuh` (3 Funktionen) | `cvt.rn.satfinite.e2m1x2.f32` | turbo / turbo2 |
-| CUTLASS `NumericArrayConverter` | `cvt.rn.satfinite.e2m1x2.f32` | exmy_base.h |
+| CUTLASS `NumericArrayConverter` | `cvt.rn.satfinite.e2m1x2.f32` | exmy_base.h / **next2** |
 | FlashInfer CUTLASS JIT | `cvt.rn.satfinite.e2m1x2.f32` | exmy_base.h |
 
 ## Aktivierung
@@ -165,12 +229,31 @@ round-to-nearest-even abweichen. Bei FP4 mit 8 Werten praktisch irrelevant.
 #if (defined(CUTLASS_ARCH_MMA_SM120A_ENABLED))  // SM121 ENTFERNT
 #  define CUDA_PTX_FP4FP6_CVT_ENABLED 1
 #endif
+
+// Guard in CUTLASS numeric_conversion.h (next2 Patch):
+// Branchless NumericConverter ersetzt exmy_base.h fuer E2M1
+#if !defined(CUDA_PTX_FP4FP6_CVT_ENABLED)
+  template <FloatRoundStyle Round>
+  struct NumericConverter<float_e2m1_t, float, Round> { /* branchless */ };
+#endif
 ```
 
-## Build-Konfiguration (Dual-Arch)
+## Build-Varianten
+
+| Variante | CUTLASS | nvfp4_utils.cuh | CUTLASS Fallback | Patch-Dateien |
+|---|---|---|---|---|
+| **turbo** | v4.2.1 | Avarok if-else | exmy_base.h (generisch) | `patch_nvfp4_utils_sw_e2m1.py` + `patch_cutlass_float_subbyte_sm121.py` |
+| **turbo2** | v4.2.1 | Branchless | exmy_base.h (generisch) | `patch_nvfp4_utils_sw_e2m1.py` + `patch_cutlass_float_subbyte_sm121.py` |
+| **next2** | v4.3.5 | (nicht noetig) | **Branchless NumConv** | `patch_cutlass_float_subbyte_sm121.py` + `patch_numeric_conversion_e2m1_branchless.py` |
 
 ```dockerfile
+# turbo / turbo2 (CUTLASS 4.2.1):
 ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
 # SM120a: Hardware E2M1 + native CUTLASS PTX
-# SM121a: Software E2M1 (turbo/turbo2) + CUTLASS exmy_base Fallback
+# SM121a: Software E2M1 (turbo/turbo2 in nvfp4_utils) + CUTLASS exmy_base Fallback
+
+# next2 (CUTLASS 4.3.5):
+ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+# SM120a: Hardware E2M1 + native CUTLASS PTX
+# SM121a: Branchless NumericConverter (CUTLASS intern) — kein nvfp4_utils Patch noetig
 ```
