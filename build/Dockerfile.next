@@ -7,8 +7,8 @@ FROM ${BASE_IMAGE}
 # EAGLE3 speculative decoding built-in
 #
 # Build:
-#   DGX:      podman build -f Dockerfile.vllm -t vllm-next .
-#   Spiegel2: podman build -f Dockerfile.vllm -t vllm-next .
+#   DGX:      podman build -f Dockerfile.next -t vllm-next .
+#   Spiegel2: podman build -f Dockerfile.next -t vllm-next .
 # ============================================================
 
 # CUDA Dev-Header (cusparse.h fehlt im Runtime-Image)
