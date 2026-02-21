@@ -25,8 +25,8 @@ import glob
 def find_float_subbyte():
     """Find vLLM's bundled CUTLASS float_subbyte.h"""
     candidates = [
+        "/opt/cutlass/include/cutlass/float_subbyte.h",
         "/app/vllm/.deps/cutlass-src/include/cutlass/float_subbyte.h",
-        # Fallback: search in common locations
     ]
 
     # Also search for any other copies in .deps
