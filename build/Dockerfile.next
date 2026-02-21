@@ -39,7 +39,7 @@ ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
 # ============================================================
 # vLLM from source (pinned to known-good commit)
 # ============================================================
-RUN git clone --depth 50 \
+RUN git clone --filter=blob:none \
       https://github.com/vllm-project/vllm.git /tmp/vllm-build && \
     cd /tmp/vllm-build && \
     git checkout f97ca6717
