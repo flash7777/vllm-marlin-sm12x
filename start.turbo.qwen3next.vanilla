@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# vllm-turbo: Qwen3-Next-80B-A3B NVFP4 (vanilla, single GPU)
+# Image: vllm-turbo (Avarok dgx-vllm v22)
+# Expected: ~42 tok/s on DGX Spark
+
+NAME="vllm-turbo-vanilla"
+MODEL="${MODEL:-/data/tensordata/qwen3-next-80B-Thinking-NVFP4}"
+
+echo "Starting ${NAME}..."
+echo "Model: ${MODEL}"
+echo "Port: 8011 (mapped from 8888)"
+
+podman run -d \
+  --replace \
+  --name "${NAME}" \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  --ipc=host \
+  -p 8011:8888 \
+  -v /data/tensordata:/data/tensordata \
+  -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
+  -e VLLM_USE_FLASHINFER_MOE_FP4=0 \
+  -e VLLM_TEST_FORCE_FP8_MARLIN=1 \
+  -e VLLM_NVFP4_GEMM_BACKEND=marlin \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  -e MODEL="${MODEL}" \
+  -e PORT=8888 \
+  -e GPU_MEMORY_UTIL=0.90 \
+  -e MAX_MODEL_LEN=65536 \
+  -e MAX_NUM_SEQS=128 \
+  -e VLLM_EXTRA_ARGS="--attention-backend flashinfer --kv-cache-dtype fp8" \
+  vllm-turbo:latest serve
+
+echo "Container ${NAME} started. Logs: podman logs -f ${NAME}"
+echo "Health: curl http://localhost:8011/health"

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# vllm-turbo: Serve with TP=2 (after head + worker are running)
+# Run on DGX Spark after both ray-head and ray-worker are started
+
+NAME="vllm-turbo-serve"
+HEAD_IP="${HEAD_IP:-192.168.0.117}"
+MODEL="${MODEL:-/data/tensordata/qwen3-next-80B-Thinking-NVFP4}"
+
+echo "Starting vLLM serve: ${NAME} with TP=2"
+echo "Model: ${MODEL}"
+echo "Port: 8011 (mapped from 8888)"
+
+podman run -d \
+  --replace \
+  --name "${NAME}" \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --ipc=host \
+  --network=host \
+  -v /data/tensordata:/data/tensordata \
+  -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
+  -e VLLM_USE_FLASHINFER_MOE_FP4=0 \
+  -e VLLM_TEST_FORCE_FP8_MARLIN=1 \
+  -e VLLM_NVFP4_GEMM_BACKEND=marlin \
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+  -e HEAD_IP="${HEAD_IP}" \
+  -e MODEL="${MODEL}" \
+  -e PORT=8888 \
+  -e GPU_MEMORY_UTIL=0.05 \
+  -e MAX_MODEL_LEN=65536 \
+  -e MAX_NUM_SEQS=128 \
+  -e TENSOR_PARALLEL_SIZE=2 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_SOCKET_IFNAME=enp1s0f0np0 \
+  -e "VLLM_EXTRA_ARGS=--attention-backend flashinfer --kv-cache-dtype fp8 --kv-cache-memory-bytes 40G" \
+  vllm-turbo:latest serve
+
+echo "Container ${NAME} started. Logs: podman logs -f ${NAME}"
+echo "Health: curl http://localhost:8888/health"

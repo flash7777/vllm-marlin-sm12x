@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Stop all vllm-turbo containers
+
+echo "Stopping vllm-turbo containers..."
+
+for NAME in vllm-turbo-vanilla vllm-turbo-mtp vllm-turbo-serve vllm-turbo-head vllm-turbo-worker; do
+  if podman ps -a --format '{{.Names}}' | grep -q "^${NAME}$"; then
+    echo "  Stopping ${NAME}..."
+    podman stop "${NAME}" 2>/dev/null || true
+    podman rm "${NAME}" 2>/dev/null || true
+  fi
+done
+
+echo "Done."

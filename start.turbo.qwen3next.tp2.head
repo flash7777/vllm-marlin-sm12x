@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# vllm-turbo: Ray Head (DGX Spark) for TP=2
+# Run on DGX Spark first, then start worker on PGX
+
+NAME="vllm-turbo-head"
+HEAD_IP="${HEAD_IP:-192.168.0.117}"
+
+echo "Starting Ray head: ${NAME} at ${HEAD_IP}"
+
+podman run -d \
+  --replace \
+  --name "${NAME}" \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --ipc=host \
+  --network=host \
+  -v /data/tensordata:/data/tensordata \
+  -v "${HOME}/.cache/huggingface:/root/.cache/huggingface" \
+  -e HEAD_IP="${HEAD_IP}" \
+  -e NUM_GPUS=1 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_SOCKET_IFNAME=enp1s0f0np0 \
+  vllm-turbo:latest ray-head
+
+echo "Ray head started at ${HEAD_IP}:6379"
+echo "Next: start worker on PGX, then start serve"

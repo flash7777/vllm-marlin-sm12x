@@ -1,0 +1,1798 @@
+STEP 1/90: FROM nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04
+Resolving "nvidia/cuda" using unqualified-search registries (/etc/containers/registries.conf)
+Trying to pull docker.io/nvidia/cuda:13.0.2-cudnn-devel-ubuntu24.04...
+Getting image source signatures
+Copying blob sha256:a2e7e61257af3470551e443b256164daebe5af2126637f81b266d13862e314a1
+Copying blob sha256:7be1e3dd81adb79f8fbffa3a472a80e4a024b7dedb4028788e15e05c4a7a3946
+Copying blob sha256:b8a35db46e38ce87d4e743e1265ff436ed36e01d23246b24a1cbbeaae18ec432
+Copying blob sha256:66c8341e87a6fcc90cd8b78f232a7707a96e4fbeaff457268bc6d4fdd8bf509a
+Copying blob sha256:653ca2e1b0e9f4dda5c4101ba798059d34362dfdd0379f1fb2b80f1e48a703df
+Copying blob sha256:526d5438c009ab7178af1646fed10ff6f47a73f5a1ae7b9f49e63e4ade7e3ae6
+Copying blob sha256:1fb3a2ad22928fee0bd0e9cd30f7d15c201feb5b28084093c6f6f1c3a17d82fb
+Copying blob sha256:ae673f68565b3ac359d9c3bd7feb9c47f240b8a319fa1bc65c5844f0278c766a
+Copying blob sha256:879ba6afff8c297599caee631d3225f534d42f0ce1cef8da885687f7dd8cc671
+Copying blob sha256:c9a23150e219947a682ecb2c0a8688c32b73aff9bdbdf7dbbfd69fd8f428bfd3
+Copying blob sha256:704ea4a1a75a54e1fc94227ad505941cc1132ec2a16ed2fedd366dd7c9493549
+Copying blob sha256:0c48f859a773016f6ae02924836e31eae2dc0199ff5162129d8f68f3457fe67c
+Copying config sha256:92bc910976850bf367ca5d50e9db0e62a963985df7876a689343c9c9d7fb12f7
+Writing manifest to image destination
+STEP 2/90: RUN apt-get update && apt-get install -y     python3.12 python3.12-venv python3-pip git wget patch     cmake build-essential ninja-build     libibverbs1 libibverbs-dev ibverbs-providers rdma-core perftest     libnuma-dev     iproute2 iputils-ping net-tools curl openssh-client     && rm -rf /var/lib/apt/lists/*
+Get:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease [256 kB]
+Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]
+Get:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease [126 kB]
+Get:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease [126 kB]
+Get:5 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 Packages [19.0 MB]
+Get:6 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa  InRelease [1579 B]
+Get:7 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa  Packages [1129 kB]
+Get:8 http://ports.ubuntu.com/ubuntu-ports noble/multiverse arm64 Packages [274 kB]
+Get:9 http://ports.ubuntu.com/ubuntu-ports noble/restricted arm64 Packages [113 kB]
+Get:10 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages [1776 kB]
+Get:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/multiverse arm64 Packages [41.7 kB]
+Get:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages [2349 kB]
+Get:13 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 Packages [1963 kB]
+Get:14 http://ports.ubuntu.com/ubuntu-ports noble-updates/restricted arm64 Packages [4717 kB]
+Get:15 http://ports.ubuntu.com/ubuntu-ports noble-backports/universe arm64 Packages [34.7 kB]
+Get:16 http://ports.ubuntu.com/ubuntu-ports noble-backports/main arm64 Packages [49.4 kB]
+Get:17 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted arm64 Packages [4526 kB]
+Get:18 http://ports.ubuntu.com/ubuntu-ports noble-security/multiverse arm64 Packages [40.1 kB]
+Get:19 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1216 kB]
+Get:20 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages [1985 kB]
+Fetched 39.9 MB in 16s (2551 kB/s)
+Reading package lists...
+W: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/InRelease: Key is stored in legacy trusted.gpg keyring (/etc/apt/trusted.gpg), see the DEPRECATION section in apt-key(8) for details.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+patch is already the newest version (2.7.6-7build3).
+patch set to manually installed.
+build-essential is already the newest version (12.10ubuntu1).
+build-essential set to manually installed.
+The following additional packages will be installed:
+  bsdutils cmake-data dbus dbus-bin dbus-daemon dbus-session-bus-common
+  dbus-system-bus-common dmidecode dmsetup ethtool gir1.2-girepository-2.0
+  gir1.2-glib-2.0 git-man javascript-common krb5-locales less libapparmor1
+  libarchive13t64 libargon2-1 libatm1t64 libblkid1 libbpf1 libbrotli1 libbsd0
+  libcap2-bin libcbor0.10 libcryptsetup12 libcurl3t64-gnutls libcurl4t64
+  libdbus-1-3 libdevmapper1.02.1 libedit2 libelf1t64 liberror-perl libexpat1
+  libexpat1-dev libfdisk1 libfido2-1 libgirepository-1.0-1 libglib2.0-0t64
+  libglib2.0-data libgssapi-krb5-2 libibumad3 libicu74 libjs-jquery
+  libjs-sphinxdoc libjs-underscore libjson-c5 libjsoncpp25 libk5crypto3
+  libkeyutils1 libkmod2 libkrb5-3 libkrb5support0 libmnl0 libmount1
+  libnghttp2-14 libnl-3-200 libnl-3-dev libnl-route-3-200 libnl-route-3-dev
+  libnuma1 libpam-cap libpci3 libpsl5t64 libpython3-dev libpython3-stdlib
+  libpython3.12-dev libpython3.12-minimal libpython3.12-stdlib
+  libpython3.12t64 librdmacm1t64 librhash0 librtmp1 libsmartcols1 libssh-4
+  libsystemd-shared libsystemd0 libudev1 libuuid1 libuv1t64 libx11-6
+  libx11-data libxau6 libxcb1 libxdmcp6 libxext6 libxml2 libxmuu1 libxtables12
+  media-types mount netbase networkd-dispatcher pci.ids publicsuffix python3
+  python3-dbus python3-dev python3-gi python3-minimal python3-pip-whl
+  python3-pkg-resources python3-setuptools python3-setuptools-whl
+  python3-wheel python3.12-dev python3.12-minimal shared-mime-info systemd
+  systemd-dev systemd-hwe-hwdb systemd-resolved systemd-timesyncd tzdata udev
+  util-linux xauth xdg-user-dirs zlib1g-dev
+Suggested packages:
+  cmake-doc cmake-format elpa-cmake-mode default-dbus-session-bus
+  | dbus-session-bus gettext-base git-daemon-run | git-daemon-sysvinit git-doc
+  git-email git-gui gitk gitweb git-cvs git-mediawiki git-svn iproute2-doc
+  apache2 | lighttpd | httpd lrzip low-memory-monitor krb5-doc krb5-user
+  cryptsetup-bin nfs-common iw | wireless-tools keychain libpam-ssh
+  monkeysphere ssh-askpass python3-doc python3-tk python3-venv python-dbus-doc
+  python-setuptools-doc python3.12-doc binfmt-support systemd-container
+  systemd-homed systemd-userdbd systemd-boot libip4tc2 libqrencode4
+  libtss2-esys-3.0.2-0 libtss2-mu-4.0.1-0 libtss2-rc0 libtss2-tcti-device0
+  polkitd dosfstools kbd util-linux-extra util-linux-locales
+Recommended packages:
+  bsdextrautils uuid-runtime
+The following NEW packages will be installed:
+  cmake cmake-data curl dbus dbus-bin dbus-daemon dbus-session-bus-common
+  dbus-system-bus-common dmidecode dmsetup ethtool gir1.2-girepository-2.0
+  gir1.2-glib-2.0 git git-man ibverbs-providers iproute2 iputils-ping
+  javascript-common krb5-locales less libapparmor1 libarchive13t64 libargon2-1
+  libatm1t64 libbpf1 libbrotli1 libbsd0 libcap2-bin libcbor0.10
+  libcryptsetup12 libcurl3t64-gnutls libcurl4t64 libdbus-1-3
+  libdevmapper1.02.1 libedit2 libelf1t64 liberror-perl libexpat1-dev libfdisk1
+  libfido2-1 libgirepository-1.0-1 libglib2.0-0t64 libglib2.0-data
+  libgssapi-krb5-2 libibumad3 libibverbs-dev libibverbs1 libicu74 libjs-jquery
+  libjs-sphinxdoc libjs-underscore libjson-c5 libjsoncpp25 libk5crypto3
+  libkeyutils1 libkmod2 libkrb5-3 libkrb5support0 libmnl0 libnghttp2-14
+  libnl-3-200 libnl-3-dev libnl-route-3-200 libnl-route-3-dev libnuma-dev
+  libnuma1 libpam-cap libpci3 libpsl5t64 libpython3-dev libpython3-stdlib
+  libpython3.12-dev libpython3.12-minimal libpython3.12-stdlib
+  libpython3.12t64 librdmacm1t64 librhash0 librtmp1 libssh-4 libsystemd-shared
+  libuv1t64 libx11-6 libx11-data libxau6 libxcb1 libxdmcp6 libxext6 libxml2
+  libxmuu1 libxtables12 media-types net-tools netbase networkd-dispatcher
+  ninja-build openssh-client pci.ids perftest publicsuffix python3
+  python3-dbus python3-dev python3-gi python3-minimal python3-pip
+  python3-pip-whl python3-pkg-resources python3-setuptools
+  python3-setuptools-whl python3-wheel python3.12 python3.12-dev
+  python3.12-minimal python3.12-venv rdma-core shared-mime-info systemd
+  systemd-dev systemd-hwe-hwdb systemd-resolved systemd-timesyncd tzdata udev
+  wget xauth xdg-user-dirs zlib1g-dev
+The following packages will be upgraded:
+  bsdutils libblkid1 libexpat1 libmount1 libsmartcols1 libsystemd0 libudev1
+  libuuid1 mount util-linux
+10 upgraded, 128 newly installed, 0 to remove and 58 not upgraded.
+Need to get 73.8 MB of archives.
+After this operation, 279 MB of additional disk space will be used.
+Get:1 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 bsdutils arm64 1:2.39.3-9ubuntu6.4 [98.5 kB]
+Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 util-linux arm64 2.39.3-9ubuntu6.4 [1115 kB]
+Get:3 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 mount arm64 2.39.3-9ubuntu6.4 [116 kB]
+Get:4 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3.12-minimal arm64 3.12.3-1ubuntu0.11 [833 kB]
+Get:5 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libexpat1 arm64 2.6.1-2ubuntu0.4 [77.5 kB]
+Get:6 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3.12-minimal arm64 3.12.3-1ubuntu0.11 [2253 kB]
+Get:7 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3-minimal arm64 3.12.3-0ubuntu2.1 [27.4 kB]
+Get:8 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 media-types all 10.1.0 [27.5 kB]
+Get:9 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 netbase all 6.4 [13.1 kB]
+Get:10 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 tzdata all 2025b-0ubuntu0.24.04.1 [276 kB]
+Get:11 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3.12-stdlib arm64 3.12.3-1ubuntu0.11 [2037 kB]
+Get:12 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3.12 arm64 3.12.3-1ubuntu0.11 [651 kB]
+Get:13 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3-stdlib arm64 3.12.3-0ubuntu2.1 [10.1 kB]
+Get:14 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3 arm64 3.12.3-0ubuntu2.1 [23.0 kB]
+Get:15 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libapparmor1 arm64 4.0.1really4.0.1-0ubuntu0.24.04.5 [51.0 kB]
+Get:16 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libargon2-1 arm64 0~20190702+dfsg-4build1 [20.5 kB]
+Get:17 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libblkid1 arm64 2.39.3-9ubuntu6.4 [123 kB]
+Get:18 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libudev1 arm64 255.4-1ubuntu8.12 [175 kB]
+Get:19 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libdevmapper1.02.1 arm64 2:1.02.185-3ubuntu3.2 [128 kB]
+Get:20 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libjson-c5 arm64 0.17-1build1 [36.4 kB]
+Get:21 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libuuid1 arm64 2.39.3-9ubuntu6.4 [36.1 kB]
+Get:22 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libcryptsetup12 arm64 2:2.7.0-1ubuntu4.2 [261 kB]
+Get:23 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libfdisk1 arm64 2.39.3-9ubuntu6.4 [142 kB]
+Get:24 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libkmod2 arm64 31+20240202-2ubuntu7.1 [51.9 kB]
+Get:25 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libmount1 arm64 2.39.3-9ubuntu6.4 [133 kB]
+Get:26 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsystemd-shared arm64 255.4-1ubuntu8.12 [2020 kB]
+Get:27 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsystemd0 arm64 255.4-1ubuntu8.12 [426 kB]
+Get:28 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 systemd-dev all 255.4-1ubuntu8.12 [106 kB]
+Get:29 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 systemd arm64 255.4-1ubuntu8.12 [3408 kB]
+Get:30 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 udev arm64 255.4-1ubuntu8.12 [1852 kB]
+Get:31 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnl-3-200 arm64 3.7.0-0.3build1.1 [57.5 kB]
+Get:32 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 rdma-core arm64 50.0-2ubuntu0.2 [63.2 kB]
+Get:33 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libsmartcols1 arm64 2.39.3-9ubuntu6.4 [65.1 kB]
+Get:34 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libdbus-1-3 arm64 1.14.10-4ubuntu4.1 [210 kB]
+Get:35 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dbus-bin arm64 1.14.10-4ubuntu4.1 [38.8 kB]
+Get:36 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dbus-session-bus-common all 1.14.10-4ubuntu4.1 [80.5 kB]
+Get:37 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dbus-daemon arm64 1.14.10-4ubuntu4.1 [115 kB]
+Get:38 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dbus-system-bus-common all 1.14.10-4ubuntu4.1 [81.6 kB]
+Get:39 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dbus arm64 1.14.10-4ubuntu4.1 [23.9 kB]
+Get:40 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dmsetup arm64 2:1.02.185-3ubuntu3.2 [74.7 kB]
+Get:41 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libglib2.0-0t64 arm64 2.80.0-6ubuntu3.8 [1532 kB]
+Get:42 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 gir1.2-glib-2.0 arm64 2.80.0-6ubuntu3.8 [182 kB]
+Get:43 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libgirepository-1.0-1 arm64 1.80.1-1 [81.2 kB]
+Get:44 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 gir1.2-girepository-2.0 arm64 1.80.1-1 [24.5 kB]
+Get:45 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libelf1t64 arm64 0.190-1.1ubuntu0.1 [58.4 kB]
+Get:46 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libbpf1 arm64 1:1.3.0-2build2 [168 kB]
+Get:47 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libmnl0 arm64 1.0.5-2build1 [12.4 kB]
+Get:48 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxtables12 arm64 1.8.10-3ubuntu2 [35.9 kB]
+Get:49 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libcap2-bin arm64 1:2.66-5ubuntu2.2 [33.5 kB]
+Get:50 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 iproute2 arm64 6.1.0-1ubuntu6.2 [1124 kB]
+Get:51 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 iputils-ping arm64 3:20240117-1ubuntu0.1 [44.6 kB]
+Get:52 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 krb5-locales all 1.20.1-6ubuntu2.6 [14.8 kB]
+Get:53 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 less arm64 590-2ubuntu2.1 [142 kB]
+Get:54 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libatm1t64 arm64 1:2.5.1-5.1build1 [23.5 kB]
+Get:55 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libbsd0 arm64 0.12.1-1build1.1 [41.0 kB]
+Get:56 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libglib2.0-data all 2.80.0-6ubuntu3.8 [49.6 kB]
+Get:57 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libkrb5support0 arm64 1.20.1-6ubuntu2.6 [34.8 kB]
+Get:58 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libk5crypto3 arm64 1.20.1-6ubuntu2.6 [85.8 kB]
+Get:59 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libkeyutils1 arm64 1.6.3-3build1 [9654 B]
+Get:60 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libkrb5-3 arm64 1.20.1-6ubuntu2.6 [349 kB]
+Get:61 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libgssapi-krb5-2 arm64 1.20.1-6ubuntu2.6 [142 kB]
+Get:62 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libicu74 arm64 74.2-1ubuntu3.1 [10.8 MB]
+Get:63 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpam-cap arm64 1:2.66-5ubuntu2.2 [12.5 kB]
+Get:64 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libxml2 arm64 2.9.14+dfsg-1.3ubuntu3.7 [735 kB]
+Get:65 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 python3-dbus arm64 1.3.2-5build3 [99.5 kB]
+Get:66 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 python3-gi arm64 3.48.2-1 [233 kB]
+Get:67 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 networkd-dispatcher all 2.2.4-1 [15.5 kB]
+Get:68 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3-pkg-resources all 68.1.2-2ubuntu1.2 [168 kB]
+Get:69 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 shared-mime-info arm64 2.4-4 [472 kB]
+Get:70 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 systemd-hwe-hwdb all 255.1.7 [3716 B]
+Get:71 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 systemd-resolved arm64 255.4-1ubuntu8.12 [291 kB]
+Get:72 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 systemd-timesyncd arm64 255.4-1ubuntu8.12 [34.8 kB]
+Get:73 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 xdg-user-dirs arm64 0.18-1build1 [18.4 kB]
+Get:74 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 dmidecode arm64 3.5-3ubuntu0.1 [61.1 kB]
+Get:75 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 ethtool arm64 1:6.7-1build1 [227 kB]
+Get:76 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnl-route-3-200 arm64 3.7.0-0.3build1.1 [182 kB]
+Get:77 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libibverbs1 arm64 50.0-2ubuntu0.2 [67.5 kB]
+Get:78 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 ibverbs-providers arm64 50.0-2ubuntu0.2 [375 kB]
+Get:79 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libcbor0.10 arm64 0.10.2-1.2ubuntu2 [26.0 kB]
+Get:80 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libedit2 arm64 3.1-20230828-1build1 [97.5 kB]
+Get:81 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libfido2-1 arm64 1.14.0-1build3 [82.5 kB]
+Get:82 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnghttp2-14 arm64 1.59.0-1ubuntu0.2 [74.5 kB]
+Get:83 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnuma1 arm64 2.0.18-1ubuntu0.24.04.1 [23.7 kB]
+Get:84 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 pci.ids all 0.0~2024.03.31-1ubuntu0.1 [275 kB]
+Get:85 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libpci3 arm64 1:3.10.0-2build1 [34.8 kB]
+Get:86 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libpsl5t64 arm64 0.21.2-1.1build1 [57.4 kB]
+Get:87 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libuv1t64 arm64 1.48.0-1.1build1 [95.3 kB]
+Get:88 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxau6 arm64 1:1.0.9-1build6 [7264 B]
+Get:89 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxdmcp6 arm64 1:1.1.3-0ubuntu6 [10.4 kB]
+Get:90 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxcb1 arm64 1.15-1ubuntu2 [49.4 kB]
+Get:91 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libx11-data all 2:1.8.7-1build1 [115 kB]
+Get:92 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libx11-6 arm64 2:1.8.7-1build1 [649 kB]
+Get:93 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxext6 arm64 2:1.3.4-1build2 [30.4 kB]
+Get:94 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libxmuu1 arm64 2:1.1.3-3build2 [9140 B]
+Get:95 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 openssh-client arm64 1:9.6p1-3ubuntu13.14 [885 kB]
+Get:96 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 publicsuffix all 20231001.0357-0.1 [129 kB]
+Get:97 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 wget arm64 1.21.4-1ubuntu4.1 [330 kB]
+Get:98 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 xauth arm64 1:1.1.2-1build1 [25.3 kB]
+Get:99 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libarchive13t64 arm64 3.7.2-2ubuntu0.5 [377 kB]
+Get:100 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libbrotli1 arm64 1.1.0-2build2 [339 kB]
+Get:101 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 librtmp1 arm64 2.4+20151223.gitfa8646d.1-2build7 [57.8 kB]
+Get:102 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libssh-4 arm64 0.10.6-2ubuntu0.3 [191 kB]
+Get:103 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libcurl4t64 arm64 8.5.0-2ubuntu10.6 [333 kB]
+Get:104 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libjsoncpp25 arm64 1.9.5-6build1 [78.2 kB]
+Get:105 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 librhash0 arm64 1.4.3-3build1 [126 kB]
+Get:106 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 cmake-data all 3.28.3-1build7 [2155 kB]
+Get:107 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 cmake arm64 3.28.3-1build7 [10.3 MB]
+Get:108 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 curl arm64 8.5.0-2ubuntu10.6 [222 kB]
+Get:109 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libcurl3t64-gnutls arm64 8.5.0-2ubuntu10.6 [328 kB]
+Get:110 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 liberror-perl all 0.17029-2 [25.6 kB]
+Get:111 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 git-man all 1:2.43.0-1ubuntu7.3 [1100 kB]
+Get:112 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 git arm64 1:2.43.0-1ubuntu7.3 [3774 kB]
+Get:113 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 javascript-common all 11+nmu1 [5936 B]
+Get:114 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libexpat1-dev arm64 2.6.1-2ubuntu0.4 [128 kB]
+Get:115 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libjs-jquery all 3.6.1+dfsg+~3.5.14-1 [328 kB]
+Get:116 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libjs-underscore all 1.13.4~dfsg+~1.11.4-3 [118 kB]
+Get:117 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 libjs-sphinxdoc all 7.2.6-6 [149 kB]
+Get:118 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnl-3-dev arm64 3.7.0-0.3build1.1 [105 kB]
+Get:119 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnl-route-3-dev arm64 3.7.0-0.3build1.1 [225 kB]
+Get:120 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3.12t64 arm64 3.12.3-1ubuntu0.11 [2286 kB]
+Get:121 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 zlib1g-dev arm64 1:1.3.dfsg-3.1ubuntu2.1 [894 kB]
+Get:122 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3.12-dev arm64 3.12.3-1ubuntu0.11 [5536 kB]
+Get:123 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libpython3-dev arm64 3.12.3-0ubuntu2.1 [10.4 kB]
+Get:124 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 librdmacm1t64 arm64 50.0-2ubuntu0.2 [70.6 kB]
+Get:125 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 net-tools arm64 2.10-0.1ubuntu4.4 [207 kB]
+Get:126 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 ninja-build arm64 1.11.1-2 [125 kB]
+Get:127 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3.12-dev arm64 3.12.3-1ubuntu0.11 [498 kB]
+Get:128 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3-dev arm64 3.12.3-0ubuntu2.1 [26.7 kB]
+Get:129 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 python3-setuptools all 68.1.2-2ubuntu1.2 [397 kB]
+Get:130 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 python3-wheel all 0.42.0-2 [53.1 kB]
+Get:131 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 python3-pip all 24.0+dfsg-1ubuntu1.3 [1320 kB]
+Get:132 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 python3-pip-whl all 24.0+dfsg-1ubuntu1.3 [1707 kB]
+Get:133 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 python3-setuptools-whl all 68.1.2-2ubuntu1.2 [716 kB]
+Get:134 http://ports.ubuntu.com/ubuntu-ports noble-updates/universe arm64 python3.12-venv arm64 3.12.3-1ubuntu0.11 [5680 B]
+Get:135 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libibumad3 arm64 50.0-2ubuntu0.2 [29.2 kB]
+Get:136 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libibverbs-dev arm64 50.0-2ubuntu0.2 [695 kB]
+Get:137 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 libnuma-dev arm64 2.0.18-1ubuntu0.24.04.1 [39.6 kB]
+Get:138 http://ports.ubuntu.com/ubuntu-ports noble/universe arm64 perftest arm64 24.01.0+0.38-1build2 [331 kB]
+debconf: delaying package configuration, since apt-utils is not installed
+Fetched 73.8 MB in 29s (2527 kB/s)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 14916 files and directories currently installed.)
+Preparing to unpack .../bsdutils_1%3a2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking bsdutils (1:2.39.3-9ubuntu6.4) over (1:2.39.3-9ubuntu6.3) ...
+Setting up bsdutils (1:2.39.3-9ubuntu6.4) ...
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 14916 files and directories currently installed.)
+Preparing to unpack .../util-linux_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking util-linux (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Setting up util-linux (2.39.3-9ubuntu6.4) ...
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 14916 files and directories currently installed.)
+Preparing to unpack .../mount_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking mount (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Selecting previously unselected package libpython3.12-minimal:arm64.
+Preparing to unpack .../libpython3.12-minimal_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking libpython3.12-minimal:arm64 (3.12.3-1ubuntu0.11) ...
+Preparing to unpack .../libexpat1_2.6.1-2ubuntu0.4_arm64.deb ...
+Unpacking libexpat1:arm64 (2.6.1-2ubuntu0.4) over (2.6.1-2ubuntu0.3) ...
+Selecting previously unselected package python3.12-minimal.
+Preparing to unpack .../python3.12-minimal_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking python3.12-minimal (3.12.3-1ubuntu0.11) ...
+Setting up libpython3.12-minimal:arm64 (3.12.3-1ubuntu0.11) ...
+Setting up libexpat1:arm64 (2.6.1-2ubuntu0.4) ...
+Setting up python3.12-minimal (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package python3-minimal.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 15227 files and directories currently installed.)
+Preparing to unpack .../0-python3-minimal_3.12.3-0ubuntu2.1_arm64.deb ...
+Unpacking python3-minimal (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package media-types.
+Preparing to unpack .../1-media-types_10.1.0_all.deb ...
+Unpacking media-types (10.1.0) ...
+Selecting previously unselected package netbase.
+Preparing to unpack .../2-netbase_6.4_all.deb ...
+Unpacking netbase (6.4) ...
+Selecting previously unselected package tzdata.
+Preparing to unpack .../3-tzdata_2025b-0ubuntu0.24.04.1_all.deb ...
+Unpacking tzdata (2025b-0ubuntu0.24.04.1) ...
+Selecting previously unselected package libpython3.12-stdlib:arm64.
+Preparing to unpack .../4-libpython3.12-stdlib_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking libpython3.12-stdlib:arm64 (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package python3.12.
+Preparing to unpack .../5-python3.12_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking python3.12 (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package libpython3-stdlib:arm64.
+Preparing to unpack .../6-libpython3-stdlib_3.12.3-0ubuntu2.1_arm64.deb ...
+Unpacking libpython3-stdlib:arm64 (3.12.3-0ubuntu2.1) ...
+Setting up python3-minimal (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package python3.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16197 files and directories currently installed.)
+Preparing to unpack .../python3_3.12.3-0ubuntu2.1_arm64.deb ...
+Unpacking python3 (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package libapparmor1:arm64.
+Preparing to unpack .../libapparmor1_4.0.1really4.0.1-0ubuntu0.24.04.5_arm64.deb ...
+Unpacking libapparmor1:arm64 (4.0.1really4.0.1-0ubuntu0.24.04.5) ...
+Selecting previously unselected package libargon2-1:arm64.
+Preparing to unpack .../libargon2-1_0~20190702+dfsg-4build1_arm64.deb ...
+Unpacking libargon2-1:arm64 (0~20190702+dfsg-4build1) ...
+Preparing to unpack .../libblkid1_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking libblkid1:arm64 (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Setting up libblkid1:arm64 (2.39.3-9ubuntu6.4) ...
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16227 files and directories currently installed.)
+Preparing to unpack .../libudev1_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking libudev1:arm64 (255.4-1ubuntu8.12) over (255.4-1ubuntu8.10) ...
+Setting up libudev1:arm64 (255.4-1ubuntu8.12) ...
+Selecting previously unselected package libdevmapper1.02.1:arm64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16227 files and directories currently installed.)
+Preparing to unpack .../libdevmapper1.02.1_2%3a1.02.185-3ubuntu3.2_arm64.deb ...
+Unpacking libdevmapper1.02.1:arm64 (2:1.02.185-3ubuntu3.2) ...
+Selecting previously unselected package libjson-c5:arm64.
+Preparing to unpack .../libjson-c5_0.17-1build1_arm64.deb ...
+Unpacking libjson-c5:arm64 (0.17-1build1) ...
+Preparing to unpack .../libuuid1_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking libuuid1:arm64 (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Setting up libuuid1:arm64 (2.39.3-9ubuntu6.4) ...
+Selecting previously unselected package libcryptsetup12:arm64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16238 files and directories currently installed.)
+Preparing to unpack .../libcryptsetup12_2%3a2.7.0-1ubuntu4.2_arm64.deb ...
+Unpacking libcryptsetup12:arm64 (2:2.7.0-1ubuntu4.2) ...
+Selecting previously unselected package libfdisk1:arm64.
+Preparing to unpack .../libfdisk1_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking libfdisk1:arm64 (2.39.3-9ubuntu6.4) ...
+Selecting previously unselected package libkmod2:arm64.
+Preparing to unpack .../libkmod2_31+20240202-2ubuntu7.1_arm64.deb ...
+Unpacking libkmod2:arm64 (31+20240202-2ubuntu7.1) ...
+Preparing to unpack .../libmount1_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking libmount1:arm64 (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Setting up libmount1:arm64 (2.39.3-9ubuntu6.4) ...
+Selecting previously unselected package libsystemd-shared:arm64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16258 files and directories currently installed.)
+Preparing to unpack .../libsystemd-shared_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking libsystemd-shared:arm64 (255.4-1ubuntu8.12) ...
+Preparing to unpack .../libsystemd0_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking libsystemd0:arm64 (255.4-1ubuntu8.12) over (255.4-1ubuntu8.10) ...
+Setting up libsystemd0:arm64 (255.4-1ubuntu8.12) ...
+Selecting previously unselected package systemd-dev.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 16266 files and directories currently installed.)
+Preparing to unpack .../0-systemd-dev_255.4-1ubuntu8.12_all.deb ...
+Unpacking systemd-dev (255.4-1ubuntu8.12) ...
+Selecting previously unselected package systemd.
+Preparing to unpack .../1-systemd_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking systemd (255.4-1ubuntu8.12) ...
+Selecting previously unselected package udev.
+Preparing to unpack .../2-udev_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking udev (255.4-1ubuntu8.12) ...
+Selecting previously unselected package libnl-3-200:arm64.
+Preparing to unpack .../3-libnl-3-200_3.7.0-0.3build1.1_arm64.deb ...
+Unpacking libnl-3-200:arm64 (3.7.0-0.3build1.1) ...
+Selecting previously unselected package rdma-core.
+Preparing to unpack .../4-rdma-core_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking rdma-core (50.0-2ubuntu0.2) ...
+Preparing to unpack .../5-libsmartcols1_2.39.3-9ubuntu6.4_arm64.deb ...
+Unpacking libsmartcols1:arm64 (2.39.3-9ubuntu6.4) over (2.39.3-9ubuntu6.3) ...
+Setting up libsmartcols1:arm64 (2.39.3-9ubuntu6.4) ...
+Selecting previously unselected package libdbus-1-3:arm64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 17431 files and directories currently installed.)
+Preparing to unpack .../000-libdbus-1-3_1.14.10-4ubuntu4.1_arm64.deb ...
+Unpacking libdbus-1-3:arm64 (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dbus-bin.
+Preparing to unpack .../001-dbus-bin_1.14.10-4ubuntu4.1_arm64.deb ...
+Unpacking dbus-bin (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dbus-session-bus-common.
+Preparing to unpack .../002-dbus-session-bus-common_1.14.10-4ubuntu4.1_all.deb ...
+Unpacking dbus-session-bus-common (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dbus-daemon.
+Preparing to unpack .../003-dbus-daemon_1.14.10-4ubuntu4.1_arm64.deb ...
+Unpacking dbus-daemon (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dbus-system-bus-common.
+Preparing to unpack .../004-dbus-system-bus-common_1.14.10-4ubuntu4.1_all.deb ...
+Unpacking dbus-system-bus-common (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dbus.
+Preparing to unpack .../005-dbus_1.14.10-4ubuntu4.1_arm64.deb ...
+Unpacking dbus (1.14.10-4ubuntu4.1) ...
+Selecting previously unselected package dmsetup.
+Preparing to unpack .../006-dmsetup_2%3a1.02.185-3ubuntu3.2_arm64.deb ...
+Unpacking dmsetup (2:1.02.185-3ubuntu3.2) ...
+Selecting previously unselected package libglib2.0-0t64:arm64.
+Preparing to unpack .../007-libglib2.0-0t64_2.80.0-6ubuntu3.8_arm64.deb ...
+Unpacking libglib2.0-0t64:arm64 (2.80.0-6ubuntu3.8) ...
+Selecting previously unselected package gir1.2-glib-2.0:arm64.
+Preparing to unpack .../008-gir1.2-glib-2.0_2.80.0-6ubuntu3.8_arm64.deb ...
+Unpacking gir1.2-glib-2.0:arm64 (2.80.0-6ubuntu3.8) ...
+Selecting previously unselected package libgirepository-1.0-1:arm64.
+Preparing to unpack .../009-libgirepository-1.0-1_1.80.1-1_arm64.deb ...
+Unpacking libgirepository-1.0-1:arm64 (1.80.1-1) ...
+Selecting previously unselected package gir1.2-girepository-2.0:arm64.
+Preparing to unpack .../010-gir1.2-girepository-2.0_1.80.1-1_arm64.deb ...
+Unpacking gir1.2-girepository-2.0:arm64 (1.80.1-1) ...
+Selecting previously unselected package libelf1t64:arm64.
+Preparing to unpack .../011-libelf1t64_0.190-1.1ubuntu0.1_arm64.deb ...
+Unpacking libelf1t64:arm64 (0.190-1.1ubuntu0.1) ...
+Selecting previously unselected package libbpf1:arm64.
+Preparing to unpack .../012-libbpf1_1%3a1.3.0-2build2_arm64.deb ...
+Unpacking libbpf1:arm64 (1:1.3.0-2build2) ...
+Selecting previously unselected package libmnl0:arm64.
+Preparing to unpack .../013-libmnl0_1.0.5-2build1_arm64.deb ...
+Unpacking libmnl0:arm64 (1.0.5-2build1) ...
+Selecting previously unselected package libxtables12:arm64.
+Preparing to unpack .../014-libxtables12_1.8.10-3ubuntu2_arm64.deb ...
+Unpacking libxtables12:arm64 (1.8.10-3ubuntu2) ...
+Selecting previously unselected package libcap2-bin.
+Preparing to unpack .../015-libcap2-bin_1%3a2.66-5ubuntu2.2_arm64.deb ...
+Unpacking libcap2-bin (1:2.66-5ubuntu2.2) ...
+Selecting previously unselected package iproute2.
+Preparing to unpack .../016-iproute2_6.1.0-1ubuntu6.2_arm64.deb ...
+Unpacking iproute2 (6.1.0-1ubuntu6.2) ...
+Selecting previously unselected package iputils-ping.
+Preparing to unpack .../017-iputils-ping_3%3a20240117-1ubuntu0.1_arm64.deb ...
+Unpacking iputils-ping (3:20240117-1ubuntu0.1) ...
+Selecting previously unselected package krb5-locales.
+Preparing to unpack .../018-krb5-locales_1.20.1-6ubuntu2.6_all.deb ...
+Unpacking krb5-locales (1.20.1-6ubuntu2.6) ...
+Selecting previously unselected package less.
+Preparing to unpack .../019-less_590-2ubuntu2.1_arm64.deb ...
+Unpacking less (590-2ubuntu2.1) ...
+Selecting previously unselected package libatm1t64:arm64.
+Preparing to unpack .../020-libatm1t64_1%3a2.5.1-5.1build1_arm64.deb ...
+Unpacking libatm1t64:arm64 (1:2.5.1-5.1build1) ...
+Selecting previously unselected package libbsd0:arm64.
+Preparing to unpack .../021-libbsd0_0.12.1-1build1.1_arm64.deb ...
+Unpacking libbsd0:arm64 (0.12.1-1build1.1) ...
+Selecting previously unselected package libglib2.0-data.
+Preparing to unpack .../022-libglib2.0-data_2.80.0-6ubuntu3.8_all.deb ...
+Unpacking libglib2.0-data (2.80.0-6ubuntu3.8) ...
+Selecting previously unselected package libkrb5support0:arm64.
+Preparing to unpack .../023-libkrb5support0_1.20.1-6ubuntu2.6_arm64.deb ...
+Unpacking libkrb5support0:arm64 (1.20.1-6ubuntu2.6) ...
+Selecting previously unselected package libk5crypto3:arm64.
+Preparing to unpack .../024-libk5crypto3_1.20.1-6ubuntu2.6_arm64.deb ...
+Unpacking libk5crypto3:arm64 (1.20.1-6ubuntu2.6) ...
+Selecting previously unselected package libkeyutils1:arm64.
+Preparing to unpack .../025-libkeyutils1_1.6.3-3build1_arm64.deb ...
+Unpacking libkeyutils1:arm64 (1.6.3-3build1) ...
+Selecting previously unselected package libkrb5-3:arm64.
+Preparing to unpack .../026-libkrb5-3_1.20.1-6ubuntu2.6_arm64.deb ...
+Unpacking libkrb5-3:arm64 (1.20.1-6ubuntu2.6) ...
+Selecting previously unselected package libgssapi-krb5-2:arm64.
+Preparing to unpack .../027-libgssapi-krb5-2_1.20.1-6ubuntu2.6_arm64.deb ...
+Unpacking libgssapi-krb5-2:arm64 (1.20.1-6ubuntu2.6) ...
+Selecting previously unselected package libicu74:arm64.
+Preparing to unpack .../028-libicu74_74.2-1ubuntu3.1_arm64.deb ...
+Unpacking libicu74:arm64 (74.2-1ubuntu3.1) ...
+Selecting previously unselected package libpam-cap:arm64.
+Preparing to unpack .../029-libpam-cap_1%3a2.66-5ubuntu2.2_arm64.deb ...
+Unpacking libpam-cap:arm64 (1:2.66-5ubuntu2.2) ...
+Selecting previously unselected package libxml2:arm64.
+Preparing to unpack .../030-libxml2_2.9.14+dfsg-1.3ubuntu3.7_arm64.deb ...
+Unpacking libxml2:arm64 (2.9.14+dfsg-1.3ubuntu3.7) ...
+Selecting previously unselected package python3-dbus.
+Preparing to unpack .../031-python3-dbus_1.3.2-5build3_arm64.deb ...
+Unpacking python3-dbus (1.3.2-5build3) ...
+Selecting previously unselected package python3-gi.
+Preparing to unpack .../032-python3-gi_3.48.2-1_arm64.deb ...
+Unpacking python3-gi (3.48.2-1) ...
+Selecting previously unselected package networkd-dispatcher.
+Preparing to unpack .../033-networkd-dispatcher_2.2.4-1_all.deb ...
+Unpacking networkd-dispatcher (2.2.4-1) ...
+Selecting previously unselected package python3-pkg-resources.
+Preparing to unpack .../034-python3-pkg-resources_68.1.2-2ubuntu1.2_all.deb ...
+Unpacking python3-pkg-resources (68.1.2-2ubuntu1.2) ...
+Selecting previously unselected package shared-mime-info.
+Preparing to unpack .../035-shared-mime-info_2.4-4_arm64.deb ...
+Unpacking shared-mime-info (2.4-4) ...
+Selecting previously unselected package systemd-hwe-hwdb.
+Preparing to unpack .../036-systemd-hwe-hwdb_255.1.7_all.deb ...
+Unpacking systemd-hwe-hwdb (255.1.7) ...
+Selecting previously unselected package systemd-resolved.
+Preparing to unpack .../037-systemd-resolved_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking systemd-resolved (255.4-1ubuntu8.12) ...
+Selecting previously unselected package systemd-timesyncd.
+Preparing to unpack .../038-systemd-timesyncd_255.4-1ubuntu8.12_arm64.deb ...
+Unpacking systemd-timesyncd (255.4-1ubuntu8.12) ...
+Selecting previously unselected package xdg-user-dirs.
+Preparing to unpack .../039-xdg-user-dirs_0.18-1build1_arm64.deb ...
+Unpacking xdg-user-dirs (0.18-1build1) ...
+Selecting previously unselected package dmidecode.
+Preparing to unpack .../040-dmidecode_3.5-3ubuntu0.1_arm64.deb ...
+Unpacking dmidecode (3.5-3ubuntu0.1) ...
+Selecting previously unselected package ethtool.
+Preparing to unpack .../041-ethtool_1%3a6.7-1build1_arm64.deb ...
+Unpacking ethtool (1:6.7-1build1) ...
+Selecting previously unselected package libnl-route-3-200:arm64.
+Preparing to unpack .../042-libnl-route-3-200_3.7.0-0.3build1.1_arm64.deb ...
+Unpacking libnl-route-3-200:arm64 (3.7.0-0.3build1.1) ...
+Selecting previously unselected package libibverbs1:arm64.
+Preparing to unpack .../043-libibverbs1_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking libibverbs1:arm64 (50.0-2ubuntu0.2) ...
+Selecting previously unselected package ibverbs-providers:arm64.
+Preparing to unpack .../044-ibverbs-providers_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking ibverbs-providers:arm64 (50.0-2ubuntu0.2) ...
+Selecting previously unselected package libcbor0.10:arm64.
+Preparing to unpack .../045-libcbor0.10_0.10.2-1.2ubuntu2_arm64.deb ...
+Unpacking libcbor0.10:arm64 (0.10.2-1.2ubuntu2) ...
+Selecting previously unselected package libedit2:arm64.
+Preparing to unpack .../046-libedit2_3.1-20230828-1build1_arm64.deb ...
+Unpacking libedit2:arm64 (3.1-20230828-1build1) ...
+Selecting previously unselected package libfido2-1:arm64.
+Preparing to unpack .../047-libfido2-1_1.14.0-1build3_arm64.deb ...
+Unpacking libfido2-1:arm64 (1.14.0-1build3) ...
+Selecting previously unselected package libnghttp2-14:arm64.
+Preparing to unpack .../048-libnghttp2-14_1.59.0-1ubuntu0.2_arm64.deb ...
+Unpacking libnghttp2-14:arm64 (1.59.0-1ubuntu0.2) ...
+Selecting previously unselected package libnuma1:arm64.
+Preparing to unpack .../049-libnuma1_2.0.18-1ubuntu0.24.04.1_arm64.deb ...
+Unpacking libnuma1:arm64 (2.0.18-1ubuntu0.24.04.1) ...
+Selecting previously unselected package pci.ids.
+Preparing to unpack .../050-pci.ids_0.0~2024.03.31-1ubuntu0.1_all.deb ...
+Unpacking pci.ids (0.0~2024.03.31-1ubuntu0.1) ...
+Selecting previously unselected package libpci3:arm64.
+Preparing to unpack .../051-libpci3_1%3a3.10.0-2build1_arm64.deb ...
+Unpacking libpci3:arm64 (1:3.10.0-2build1) ...
+Selecting previously unselected package libpsl5t64:arm64.
+Preparing to unpack .../052-libpsl5t64_0.21.2-1.1build1_arm64.deb ...
+Unpacking libpsl5t64:arm64 (0.21.2-1.1build1) ...
+Selecting previously unselected package libuv1t64:arm64.
+Preparing to unpack .../053-libuv1t64_1.48.0-1.1build1_arm64.deb ...
+Unpacking libuv1t64:arm64 (1.48.0-1.1build1) ...
+Selecting previously unselected package libxau6:arm64.
+Preparing to unpack .../054-libxau6_1%3a1.0.9-1build6_arm64.deb ...
+Unpacking libxau6:arm64 (1:1.0.9-1build6) ...
+Selecting previously unselected package libxdmcp6:arm64.
+Preparing to unpack .../055-libxdmcp6_1%3a1.1.3-0ubuntu6_arm64.deb ...
+Unpacking libxdmcp6:arm64 (1:1.1.3-0ubuntu6) ...
+Selecting previously unselected package libxcb1:arm64.
+Preparing to unpack .../056-libxcb1_1.15-1ubuntu2_arm64.deb ...
+Unpacking libxcb1:arm64 (1.15-1ubuntu2) ...
+Selecting previously unselected package libx11-data.
+Preparing to unpack .../057-libx11-data_2%3a1.8.7-1build1_all.deb ...
+Unpacking libx11-data (2:1.8.7-1build1) ...
+Selecting previously unselected package libx11-6:arm64.
+Preparing to unpack .../058-libx11-6_2%3a1.8.7-1build1_arm64.deb ...
+Unpacking libx11-6:arm64 (2:1.8.7-1build1) ...
+Selecting previously unselected package libxext6:arm64.
+Preparing to unpack .../059-libxext6_2%3a1.3.4-1build2_arm64.deb ...
+Unpacking libxext6:arm64 (2:1.3.4-1build2) ...
+Selecting previously unselected package libxmuu1:arm64.
+Preparing to unpack .../060-libxmuu1_2%3a1.1.3-3build2_arm64.deb ...
+Unpacking libxmuu1:arm64 (2:1.1.3-3build2) ...
+Selecting previously unselected package openssh-client.
+Preparing to unpack .../061-openssh-client_1%3a9.6p1-3ubuntu13.14_arm64.deb ...
+Unpacking openssh-client (1:9.6p1-3ubuntu13.14) ...
+Selecting previously unselected package publicsuffix.
+Preparing to unpack .../062-publicsuffix_20231001.0357-0.1_all.deb ...
+Unpacking publicsuffix (20231001.0357-0.1) ...
+Selecting previously unselected package wget.
+Preparing to unpack .../063-wget_1.21.4-1ubuntu4.1_arm64.deb ...
+Unpacking wget (1.21.4-1ubuntu4.1) ...
+Selecting previously unselected package xauth.
+Preparing to unpack .../064-xauth_1%3a1.1.2-1build1_arm64.deb ...
+Unpacking xauth (1:1.1.2-1build1) ...
+Selecting previously unselected package libarchive13t64:arm64.
+Preparing to unpack .../065-libarchive13t64_3.7.2-2ubuntu0.5_arm64.deb ...
+Unpacking libarchive13t64:arm64 (3.7.2-2ubuntu0.5) ...
+Selecting previously unselected package libbrotli1:arm64.
+Preparing to unpack .../066-libbrotli1_1.1.0-2build2_arm64.deb ...
+Unpacking libbrotli1:arm64 (1.1.0-2build2) ...
+Selecting previously unselected package librtmp1:arm64.
+Preparing to unpack .../067-librtmp1_2.4+20151223.gitfa8646d.1-2build7_arm64.deb ...
+Unpacking librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2build7) ...
+Selecting previously unselected package libssh-4:arm64.
+Preparing to unpack .../068-libssh-4_0.10.6-2ubuntu0.3_arm64.deb ...
+Unpacking libssh-4:arm64 (0.10.6-2ubuntu0.3) ...
+Selecting previously unselected package libcurl4t64:arm64.
+Preparing to unpack .../069-libcurl4t64_8.5.0-2ubuntu10.6_arm64.deb ...
+Unpacking libcurl4t64:arm64 (8.5.0-2ubuntu10.6) ...
+Selecting previously unselected package libjsoncpp25:arm64.
+Preparing to unpack .../070-libjsoncpp25_1.9.5-6build1_arm64.deb ...
+Unpacking libjsoncpp25:arm64 (1.9.5-6build1) ...
+Selecting previously unselected package librhash0:arm64.
+Preparing to unpack .../071-librhash0_1.4.3-3build1_arm64.deb ...
+Unpacking librhash0:arm64 (1.4.3-3build1) ...
+Selecting previously unselected package cmake-data.
+Preparing to unpack .../072-cmake-data_3.28.3-1build7_all.deb ...
+Unpacking cmake-data (3.28.3-1build7) ...
+Selecting previously unselected package cmake.
+Preparing to unpack .../073-cmake_3.28.3-1build7_arm64.deb ...
+Unpacking cmake (3.28.3-1build7) ...
+Selecting previously unselected package curl.
+Preparing to unpack .../074-curl_8.5.0-2ubuntu10.6_arm64.deb ...
+Unpacking curl (8.5.0-2ubuntu10.6) ...
+Selecting previously unselected package libcurl3t64-gnutls:arm64.
+Preparing to unpack .../075-libcurl3t64-gnutls_8.5.0-2ubuntu10.6_arm64.deb ...
+Unpacking libcurl3t64-gnutls:arm64 (8.5.0-2ubuntu10.6) ...
+Selecting previously unselected package liberror-perl.
+Preparing to unpack .../076-liberror-perl_0.17029-2_all.deb ...
+Unpacking liberror-perl (0.17029-2) ...
+Selecting previously unselected package git-man.
+Preparing to unpack .../077-git-man_1%3a2.43.0-1ubuntu7.3_all.deb ...
+Unpacking git-man (1:2.43.0-1ubuntu7.3) ...
+Selecting previously unselected package git.
+Preparing to unpack .../078-git_1%3a2.43.0-1ubuntu7.3_arm64.deb ...
+Unpacking git (1:2.43.0-1ubuntu7.3) ...
+Selecting previously unselected package javascript-common.
+Preparing to unpack .../079-javascript-common_11+nmu1_all.deb ...
+Unpacking javascript-common (11+nmu1) ...
+Selecting previously unselected package libexpat1-dev:arm64.
+Preparing to unpack .../080-libexpat1-dev_2.6.1-2ubuntu0.4_arm64.deb ...
+Unpacking libexpat1-dev:arm64 (2.6.1-2ubuntu0.4) ...
+Selecting previously unselected package libjs-jquery.
+Preparing to unpack .../081-libjs-jquery_3.6.1+dfsg+~3.5.14-1_all.deb ...
+Unpacking libjs-jquery (3.6.1+dfsg+~3.5.14-1) ...
+Selecting previously unselected package libjs-underscore.
+Preparing to unpack .../082-libjs-underscore_1.13.4~dfsg+~1.11.4-3_all.deb ...
+Unpacking libjs-underscore (1.13.4~dfsg+~1.11.4-3) ...
+Selecting previously unselected package libjs-sphinxdoc.
+Preparing to unpack .../083-libjs-sphinxdoc_7.2.6-6_all.deb ...
+Unpacking libjs-sphinxdoc (7.2.6-6) ...
+Selecting previously unselected package libnl-3-dev:arm64.
+Preparing to unpack .../084-libnl-3-dev_3.7.0-0.3build1.1_arm64.deb ...
+Unpacking libnl-3-dev:arm64 (3.7.0-0.3build1.1) ...
+Selecting previously unselected package libnl-route-3-dev:arm64.
+Preparing to unpack .../085-libnl-route-3-dev_3.7.0-0.3build1.1_arm64.deb ...
+Unpacking libnl-route-3-dev:arm64 (3.7.0-0.3build1.1) ...
+Selecting previously unselected package libpython3.12t64:arm64.
+Preparing to unpack .../086-libpython3.12t64_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking libpython3.12t64:arm64 (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package zlib1g-dev:arm64.
+Preparing to unpack .../087-zlib1g-dev_1%3a1.3.dfsg-3.1ubuntu2.1_arm64.deb ...
+Unpacking zlib1g-dev:arm64 (1:1.3.dfsg-3.1ubuntu2.1) ...
+Selecting previously unselected package libpython3.12-dev:arm64.
+Preparing to unpack .../088-libpython3.12-dev_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking libpython3.12-dev:arm64 (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package libpython3-dev:arm64.
+Preparing to unpack .../089-libpython3-dev_3.12.3-0ubuntu2.1_arm64.deb ...
+Unpacking libpython3-dev:arm64 (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package librdmacm1t64:arm64.
+Preparing to unpack .../090-librdmacm1t64_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking librdmacm1t64:arm64 (50.0-2ubuntu0.2) ...
+Selecting previously unselected package net-tools.
+Preparing to unpack .../091-net-tools_2.10-0.1ubuntu4.4_arm64.deb ...
+Unpacking net-tools (2.10-0.1ubuntu4.4) ...
+Selecting previously unselected package ninja-build.
+Preparing to unpack .../092-ninja-build_1.11.1-2_arm64.deb ...
+Unpacking ninja-build (1.11.1-2) ...
+Selecting previously unselected package python3.12-dev.
+Preparing to unpack .../093-python3.12-dev_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking python3.12-dev (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package python3-dev.
+Preparing to unpack .../094-python3-dev_3.12.3-0ubuntu2.1_arm64.deb ...
+Unpacking python3-dev (3.12.3-0ubuntu2.1) ...
+Selecting previously unselected package python3-setuptools.
+Preparing to unpack .../095-python3-setuptools_68.1.2-2ubuntu1.2_all.deb ...
+Unpacking python3-setuptools (68.1.2-2ubuntu1.2) ...
+Selecting previously unselected package python3-wheel.
+Preparing to unpack .../096-python3-wheel_0.42.0-2_all.deb ...
+Unpacking python3-wheel (0.42.0-2) ...
+Selecting previously unselected package python3-pip.
+Preparing to unpack .../097-python3-pip_24.0+dfsg-1ubuntu1.3_all.deb ...
+Unpacking python3-pip (24.0+dfsg-1ubuntu1.3) ...
+Selecting previously unselected package python3-pip-whl.
+Preparing to unpack .../098-python3-pip-whl_24.0+dfsg-1ubuntu1.3_all.deb ...
+Unpacking python3-pip-whl (24.0+dfsg-1ubuntu1.3) ...
+Selecting previously unselected package python3-setuptools-whl.
+Preparing to unpack .../099-python3-setuptools-whl_68.1.2-2ubuntu1.2_all.deb ...
+Unpacking python3-setuptools-whl (68.1.2-2ubuntu1.2) ...
+Selecting previously unselected package python3.12-venv.
+Preparing to unpack .../100-python3.12-venv_3.12.3-1ubuntu0.11_arm64.deb ...
+Unpacking python3.12-venv (3.12.3-1ubuntu0.11) ...
+Selecting previously unselected package libibumad3:arm64.
+Preparing to unpack .../101-libibumad3_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking libibumad3:arm64 (50.0-2ubuntu0.2) ...
+Selecting previously unselected package libibverbs-dev:arm64.
+Preparing to unpack .../102-libibverbs-dev_50.0-2ubuntu0.2_arm64.deb ...
+Unpacking libibverbs-dev:arm64 (50.0-2ubuntu0.2) ...
+Selecting previously unselected package libnuma-dev:arm64.
+Preparing to unpack .../103-libnuma-dev_2.0.18-1ubuntu0.24.04.1_arm64.deb ...
+Unpacking libnuma-dev:arm64 (2.0.18-1ubuntu0.24.04.1) ...
+Selecting previously unselected package perftest.
+Preparing to unpack .../104-perftest_24.01.0+0.38-1build2_arm64.deb ...
+Unpacking perftest (24.01.0+0.38-1build2) ...
+Setting up media-types (10.1.0) ...
+Setting up javascript-common (11+nmu1) ...
+Setting up libxau6:arm64 (1:1.0.9-1build6) ...
+Setting up net-tools (2.10-0.1ubuntu4.4) ...
+Setting up python3-setuptools-whl (68.1.2-2ubuntu1.2) ...
+Setting up libkeyutils1:arm64 (1.6.3-3build1) ...
+Setting up libapparmor1:arm64 (4.0.1really4.0.1-0ubuntu0.24.04.5) ...
+Setting up pci.ids (0.0~2024.03.31-1ubuntu0.1) ...
+Setting up libatm1t64:arm64 (1:2.5.1-5.1build1) ...
+Setting up xdg-user-dirs (0.18-1build1) ...
+Setting up python3-pip-whl (24.0+dfsg-1ubuntu1.3) ...
+Setting up libcbor0.10:arm64 (0.10.2-1.2ubuntu2) ...
+Setting up libargon2-1:arm64 (0~20190702+dfsg-4build1) ...
+Setting up libbrotli1:arm64 (1.1.0-2build2) ...
+Setting up libuv1t64:arm64 (1.48.0-1.1build1) ...
+Setting up libpsl5t64:arm64 (0.21.2-1.1build1) ...
+Setting up libnghttp2-14:arm64 (1.59.0-1ubuntu0.2) ...
+Setting up libibumad3:arm64 (50.0-2ubuntu0.2) ...
+Setting up less (590-2ubuntu2.1) ...
+Setting up systemd-dev (255.4-1ubuntu8.12) ...
+Setting up krb5-locales (1.20.1-6ubuntu2.6) ...
+Setting up ninja-build (1.11.1-2) ...
+Setting up libelf1t64:arm64 (0.190-1.1ubuntu0.1) ...
+Setting up libkrb5support0:arm64 (1.20.1-6ubuntu2.6) ...
+Setting up tzdata (2025b-0ubuntu0.24.04.1) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+Configuring tzdata
+------------------
+
+Please select the geographic area in which you live. Subsequent configuration
+questions will narrow this down by presenting a list of cities, representing
+the time zones in which they are located.
+
+  1. Africa      4. Arctic    7. Australia  10. Pacific
+  2. America     5. Asia      8. Europe     11. Etc
+  3. Antarctica  6. Atlantic  9. Indian     12. Legacy
+Geographic area: 
+Use of uninitialized value $_[1] in join or string at /usr/share/perl5/Debconf/DbDriver/Stack.pm line 112.
+
+Current default time zone: '/UTC'
+Local time is now:      Sat Feb 21 08:30:54 UTC 2026.
+Universal Time is now:  Sat Feb 21 08:30:54 UTC 2026.
+Run 'dpkg-reconfigure tzdata' if you wish to change it.
+
+Use of uninitialized value $val in substitution (s///) at /usr/share/perl5/Debconf/Format/822.pm line 84, <GEN6> line 4.
+Use of uninitialized value $val in concatenation (.) or string at /usr/share/perl5/Debconf/Format/822.pm line 85, <GEN6> line 4.
+Setting up libcap2-bin (1:2.66-5ubuntu2.2) ...
+Setting up liberror-perl (0.17029-2) ...
+Setting up libglib2.0-0t64:arm64 (2.80.0-6ubuntu3.8) ...
+No schema files found: doing nothing.
+Setting up libglib2.0-data (2.80.0-6ubuntu3.8) ...
+Setting up libexpat1-dev:arm64 (2.6.1-2ubuntu0.4) ...
+Setting up libx11-data (2:1.8.7-1build1) ...
+Setting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2build7) ...
+Setting up libdbus-1-3:arm64 (1.14.10-4ubuntu4.1) ...
+Setting up libmnl0:arm64 (1.0.5-2build1) ...
+Setting up libjsoncpp25:arm64 (1.9.5-6build1) ...
+Setting up gir1.2-glib-2.0:arm64 (2.80.0-6ubuntu3.8) ...
+Setting up libk5crypto3:arm64 (1.20.1-6ubuntu2.6) ...
+Setting up libxtables12:arm64 (1.8.10-3ubuntu2) ...
+Setting up libfdisk1:arm64 (2.39.3-9ubuntu6.4) ...
+Setting up libicu74:arm64 (74.2-1ubuntu3.1) ...
+Setting up zlib1g-dev:arm64 (1:1.3.dfsg-3.1ubuntu2.1) ...
+Setting up libpci3:arm64 (1:3.10.0-2build1) ...
+Setting up libdevmapper1.02.1:arm64 (2:1.02.185-3ubuntu3.2) ...
+Setting up libnuma1:arm64 (2.0.18-1ubuntu0.24.04.1) ...
+Setting up mount (2.39.3-9ubuntu6.4) ...
+Setting up dmsetup (2:1.02.185-3ubuntu3.2) ...
+Setting up librhash0:arm64 (1.4.3-3build1) ...
+Setting up dbus-session-bus-common (1.14.10-4ubuntu4.1) ...
+Setting up libnl-3-200:arm64 (3.7.0-0.3build1.1) ...
+Setting up git-man (1:2.43.0-1ubuntu7.3) ...
+Setting up libgirepository-1.0-1:arm64 (1.80.1-1) ...
+Setting up netbase (6.4) ...
+Setting up cmake-data (3.28.3-1build7) ...
+Setting up libkrb5-3:arm64 (1.20.1-6ubuntu2.6) ...
+Setting up libjs-jquery (3.6.1+dfsg+~3.5.14-1) ...
+Setting up dmidecode (3.5-3ubuntu0.1) ...
+Setting up dbus-system-bus-common (1.14.10-4ubuntu4.1) ...
+Setting up libfido2-1:arm64 (1.14.0-1build3) ...
+Setting up libbsd0:arm64 (0.12.1-1build1.1) ...
+Setting up libpam-cap:arm64 (1:2.66-5ubuntu2.2) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+Setting up iputils-ping (3:20240117-1ubuntu0.1) ...
+Setting up libjson-c5:arm64 (0.17-1build1) ...
+Setting up publicsuffix (20231001.0357-0.1) ...
+Setting up libxml2:arm64 (2.9.14+dfsg-1.3ubuntu3.7) ...
+Setting up dbus-bin (1.14.10-4ubuntu4.1) ...
+Setting up libbpf1:arm64 (1:1.3.0-2build2) ...
+Setting up libkmod2:arm64 (31+20240202-2ubuntu7.1) ...
+Setting up libjs-underscore (1.13.4~dfsg+~1.11.4-3) ...
+Setting up ethtool (1:6.7-1build1) ...
+Setting up libxdmcp6:arm64 (1:1.1.3-0ubuntu6) ...
+Setting up libxcb1:arm64 (1.15-1ubuntu2) ...
+Setting up libpython3.12-stdlib:arm64 (3.12.3-1ubuntu0.11) ...
+Setting up wget (1.21.4-1ubuntu4.1) ...
+Setting up iproute2 (6.1.0-1ubuntu6.2) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+Setting up python3.12 (3.12.3-1ubuntu0.11) ...
+Setting up libedit2:arm64 (3.1-20230828-1build1) ...
+Setting up dbus-daemon (1.14.10-4ubuntu4.1) ...
+Setting up libnuma-dev:arm64 (2.0.18-1ubuntu0.24.04.1) ...
+Setting up libnl-route-3-200:arm64 (3.7.0-0.3build1.1) ...
+Setting up libpython3.12t64:arm64 (3.12.3-1ubuntu0.11) ...
+Setting up gir1.2-girepository-2.0:arm64 (1.80.1-1) ...
+Setting up dbus (1.14.10-4ubuntu4.1) ...
+Setting up shared-mime-info (2.4-4) ...
+Setting up libgssapi-krb5-2:arm64 (1.20.1-6ubuntu2.6) ...
+Setting up libsystemd-shared:arm64 (255.4-1ubuntu8.12) ...
+Setting up libjs-sphinxdoc (7.2.6-6) ...
+Setting up libssh-4:arm64 (0.10.6-2ubuntu0.3) ...
+Setting up libnl-3-dev:arm64 (3.7.0-0.3build1.1) ...
+Setting up libx11-6:arm64 (2:1.8.7-1build1) ...
+Setting up libcryptsetup12:arm64 (2:2.7.0-1ubuntu4.2) ...
+Setting up libarchive13t64:arm64 (3.7.2-2ubuntu0.5) ...
+Setting up libxmuu1:arm64 (2:1.1.3-3build2) ...
+Setting up libpython3-stdlib:arm64 (3.12.3-0ubuntu2.1) ...
+Setting up libibverbs1:arm64 (50.0-2ubuntu0.2) ...
+Setting up libcurl4t64:arm64 (8.5.0-2ubuntu10.6) ...
+Setting up ibverbs-providers:arm64 (50.0-2ubuntu0.2) ...
+Setting up python3.12-venv (3.12.3-1ubuntu0.11) ...
+Setting up openssh-client (1:9.6p1-3ubuntu13.14) ...
+Setting up libcurl3t64-gnutls:arm64 (8.5.0-2ubuntu10.6) ...
+Setting up libxext6:arm64 (2:1.3.4-1build2) ...
+Setting up python3 (3.12.3-0ubuntu2.1) ...
+running python rtupdate hooks for python3.12...
+running python post-rtupdate hooks for python3.12...
+Setting up systemd (255.4-1ubuntu8.12) ...
+Created symlink /etc/systemd/system/getty.target.wants/getty@tty1.service → /usr/lib/systemd/system/getty@.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/remote-fs.target → /usr/lib/systemd/system/remote-fs.target.
+Created symlink /etc/systemd/system/sysinit.target.wants/systemd-pstore.service → /usr/lib/systemd/system/systemd-pstore.service.
+Initializing machine ID from D-Bus machine ID.
+/usr/lib/tmpfiles.d/static-nodes-permissions.conf:18: Failed to resolve group 'kvm': No such process
+/usr/lib/tmpfiles.d/static-nodes-permissions.conf:19: Failed to resolve group 'kvm': No such process
+/usr/lib/tmpfiles.d/static-nodes-permissions.conf:20: Failed to resolve group 'kvm': No such process
+/usr/lib/tmpfiles.d/systemd-network.conf:10: Failed to resolve user 'systemd-network': No such process
+/usr/lib/tmpfiles.d/systemd-network.conf:11: Failed to resolve user 'systemd-network': No such process
+/usr/lib/tmpfiles.d/systemd-network.conf:12: Failed to resolve user 'systemd-network': No such process
+/usr/lib/tmpfiles.d/systemd-network.conf:13: Failed to resolve user 'systemd-network': No such process
+/usr/lib/tmpfiles.d/systemd.conf:22: Failed to resolve group 'systemd-journal': No such process
+/usr/lib/tmpfiles.d/systemd.conf:23: Failed to resolve group 'systemd-journal': No such process
+/usr/lib/tmpfiles.d/systemd.conf:28: Failed to resolve group 'systemd-journal': No such process
+/usr/lib/tmpfiles.d/systemd.conf:29: Failed to resolve group 'systemd-journal': No such process
+/usr/lib/tmpfiles.d/systemd.conf:30: Failed to resolve group 'systemd-journal': No such process
+Creating group 'systemd-journal' with GID 999.
+Creating group 'systemd-network' with GID 998.
+Creating user 'systemd-network' (systemd Network Management) with UID 998 and GID 998.
+Setting up libpython3.12-dev:arm64 (3.12.3-1ubuntu0.11) ...
+Setting up python3-wheel (0.42.0-2) ...
+Setting up libnl-route-3-dev:arm64 (3.7.0-0.3build1.1) ...
+Setting up python3-gi (3.48.2-1) ...
+Setting up systemd-timesyncd (255.4-1ubuntu8.12) ...
+Creating group 'systemd-timesync' with GID 997.
+Creating user 'systemd-timesync' (systemd Time Synchronization) with UID 997 and GID 997.
+Created symlink /etc/systemd/system/dbus-org.freedesktop.timesync1.service → /usr/lib/systemd/system/systemd-timesyncd.service.
+Created symlink /etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service → /usr/lib/systemd/system/systemd-timesyncd.service.
+Setting up udev (255.4-1ubuntu8.12) ...
+Creating group 'input' with GID 996.
+Creating group 'sgx' with GID 995.
+Creating group 'kvm' with GID 994.
+Creating group 'render' with GID 993.
+Setting up python3.12-dev (3.12.3-1ubuntu0.11) ...
+Setting up git (1:2.43.0-1ubuntu7.3) ...
+Setting up systemd-hwe-hwdb (255.1.7) ...
+Setting up xauth (1:1.1.2-1build1) ...
+Setting up cmake (3.28.3-1build7) ...
+Setting up librdmacm1t64:arm64 (50.0-2ubuntu0.2) ...
+Setting up curl (8.5.0-2ubuntu10.6) ...
+Setting up rdma-core (50.0-2ubuntu0.2) ...
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+rocep1s0f0: Failed to write 'change' to '/sys/devices/pci0000:00/0000:00:00.0/0000:01:00.0/infiniband/rocep1s0f0/uevent': Permission denied
+rocep1s0f1: Failed to write 'change' to '/sys/devices/pci0000:00/0000:00:00.0/0000:01:00.1/infiniband/rocep1s0f1/uevent': Permission denied
+roceP2p1s0f0: Failed to write 'change' to '/sys/devices/pci0002:00/0002:00:00.0/0002:01:00.0/infiniband/roceP2p1s0f0/uevent': Permission denied
+roceP2p1s0f1: Failed to write 'change' to '/sys/devices/pci0002:00/0002:00:00.0/0002:01:00.1/infiniband/roceP2p1s0f1/uevent': Permission denied
+lo: Failed to write 'change' to '/sys/devices/virtual/net/lo/uevent': Read-only file system
+umad0: Failed to write 'change' to '/sys/devices/pci0000:00/0000:00:00.0/0000:01:00.0/infiniband_mad/umad0/uevent': Permission denied
+umad1: Failed to write 'change' to '/sys/devices/pci0000:00/0000:00:00.0/0000:01:00.1/infiniband_mad/umad1/uevent': Permission denied
+umad2: Failed to write 'change' to '/sys/devices/pci0002:00/0002:00:00.0/0002:01:00.0/infiniband_mad/umad2/uevent': Permission denied
+umad3: Failed to write 'change' to '/sys/devices/pci0002:00/0002:00:00.0/0002:01:00.1/infiniband_mad/umad3/uevent': Permission denied
+Setting up systemd-resolved (255.4-1ubuntu8.12) ...
+Converting /etc/resolv.conf to a symlink to /run/systemd/resolve/stub-resolv.conf...
+mv: cannot move '/etc/resolv.conf' to '/etc/.resolv.conf.systemd-resolved.bak': Device or resource busy
+Cannot take a backup of /etc/resolv.conf.
+ln: failed to create symbolic link '/etc/resolv.conf': Device or resource busy
+Cannot install symlink from /etc/resolv.conf to ../run/systemd/resolve/stub-resolv.conf
+Creating group 'systemd-resolve' with GID 992.
+Creating user 'systemd-resolve' (systemd Resolver) with UID 992 and GID 992.
+Created symlink /etc/systemd/system/dbus-org.freedesktop.resolve1.service → /usr/lib/systemd/system/systemd-resolved.service.
+Created symlink /etc/systemd/system/sysinit.target.wants/systemd-resolved.service → /usr/lib/systemd/system/systemd-resolved.service.
+Setting up python3-pkg-resources (68.1.2-2ubuntu1.2) ...
+Setting up python3-dbus (1.3.2-5build3) ...
+Setting up libpython3-dev:arm64 (3.12.3-0ubuntu2.1) ...
+Setting up python3-setuptools (68.1.2-2ubuntu1.2) ...
+Setting up perftest (24.01.0+0.38-1build2) ...
+Setting up libibverbs-dev:arm64 (50.0-2ubuntu0.2) ...
+Setting up python3-dev (3.12.3-0ubuntu2.1) ...
+Setting up python3-pip (24.0+dfsg-1ubuntu1.3) ...
+Setting up networkd-dispatcher (2.2.4-1) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/networkd-dispatcher.service → /usr/lib/systemd/system/networkd-dispatcher.service.
+Processing triggers for libc-bin (2.39-0ubuntu8.6) ...
+--> f8fe5c75ea9f
+STEP 3/90: WORKDIR /app
+--> 586511e7a1a7
+STEP 4/90: RUN python3.12 -m venv /opt/venv
+--> 96f3125dd918
+STEP 5/90: ENV PATH="/opt/venv/bin:$PATH"
+--> ce3b93e701e1
+STEP 6/90: RUN pip install --upgrade pip
+Requirement already satisfied: pip in /opt/venv/lib/python3.12/site-packages (24.0)
+Collecting pip
+  Downloading pip-26.0.1-py3-none-any.whl.metadata (4.7 kB)
+Downloading pip-26.0.1-py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 2.6 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 24.0
+    Uninstalling pip-24.0:
+      Successfully uninstalled pip-24.0
+Successfully installed pip-26.0.1
+--> 681d9e586975
+STEP 7/90: RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+Looking in indexes: https://download.pytorch.org/whl/cu130
+Collecting torch
+  Downloading https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (30 kB)
+Collecting torchvision
+  Downloading https://download.pytorch.org/whl/cu130/torchvision-0.25.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (5.4 kB)
+Collecting torchaudio
+  Downloading https://download.pytorch.org/whl/cu130/torchaudio-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (6.9 kB)
+Collecting filelock (from torch)
+  Downloading filelock-3.20.0-py3-none-any.whl.metadata (2.1 kB)
+Collecting typing-extensions>=4.10.0 (from torch)
+  Downloading https://download.pytorch.org/whl/typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting setuptools (from torch)
+  Downloading https://download.pytorch.org/whl/setuptools-70.2.0-py3-none-any.whl.metadata (5.8 kB)
+Collecting sympy>=1.13.3 (from torch)
+  Downloading sympy-1.14.0-py3-none-any.whl.metadata (12 kB)
+Collecting networkx>=2.5.1 (from torch)
+  Downloading networkx-3.6.1-py3-none-any.whl.metadata (6.8 kB)
+Collecting jinja2 (from torch)
+  Downloading https://download.pytorch.org/whl/jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting fsspec>=0.8.5 (from torch)
+  Downloading fsspec-2025.12.0-py3-none-any.whl.metadata (10 kB)
+Collecting cuda-bindings==13.0.3 (from torch)
+  Downloading https://download.pytorch.org/whl/cuda_bindings-13.0.3-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (2.3 kB)
+Collecting nvidia-cuda-nvrtc==13.0.88 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cuda-nvrtc/nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (43.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 43.0/43.0 MB 2.6 MB/s  0:00:16
+Collecting nvidia-cuda-runtime==13.0.96 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cuda-runtime/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (2.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 2.7 MB/s  0:00:00
+Collecting nvidia-cuda-cupti==13.0.85 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cuda-cupti/nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_aarch64.whl (10.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.3/10.3 MB 2.7 MB/s  0:00:03
+Collecting nvidia-cudnn-cu13==9.15.1.9 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cudnn-cu13/nvidia_cudnn_cu13-9.15.1.9-py3-none-manylinux_2_27_aarch64.whl (415.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 415.6/415.6 MB 2.6 MB/s  0:02:38
+Collecting nvidia-cublas==13.1.0.3 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cublas/nvidia_cublas-13.1.0.3-py3-none-manylinux_2_27_aarch64.whl (542.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 542.9/542.9 MB 2.6 MB/s  0:03:29
+Collecting nvidia-cufft==12.0.0.61 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cufft/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (214.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 214.1/214.1 MB 2.6 MB/s  0:01:21
+Collecting nvidia-curand==10.4.0.35 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-curand/nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_aarch64.whl (62.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.0/62.0 MB 2.6 MB/s  0:00:23
+Collecting nvidia-cusolver==12.0.4.66 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cusolver/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_aarch64.whl (223.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 223.5/223.5 MB 2.6 MB/s  0:01:24
+Collecting nvidia-cusparse==12.6.3.3 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cusparse/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (162.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 162.2/162.2 MB 2.6 MB/s  0:01:01
+Collecting nvidia-cusparselt-cu13==0.8.0 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cusparselt-cu13/nvidia_cusparselt_cu13-0.8.0-py3-none-manylinux2014_aarch64.whl (220.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 220.8/220.8 MB 2.6 MB/s  0:01:24
+Collecting nvidia-nccl-cu13==2.28.9 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-nccl-cu13/nvidia_nccl_cu13-2.28.9-py3-none-manylinux_2_18_aarch64.whl (196.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 196.6/196.6 MB 2.6 MB/s  0:01:15
+Collecting nvidia-nvshmem-cu13==3.4.5 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-nvshmem-cu13/nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (60.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 60.2/60.2 MB 2.6 MB/s  0:00:22
+Collecting nvidia-nvtx==13.0.85 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-nvtx/nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (148 kB)
+Collecting nvidia-nvjitlink==13.0.88 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-nvjitlink/nvidia_nvjitlink-13.0.88-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (38.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 38.8/38.8 MB 2.6 MB/s  0:00:14
+Collecting nvidia-cufile==1.15.1.6 (from torch)
+  Downloading https://pypi.nvidia.com/nvidia-cufile/nvidia_cufile-1.15.1.6-py3-none-manylinux_2_27_aarch64.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 2.7 MB/s  0:00:00
+Collecting triton==3.6.0 (from torch)
+  Downloading https://download.pytorch.org/whl/triton-3.6.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (1.7 kB)
+Collecting cuda-pathfinder~=1.1 (from cuda-bindings==13.0.3->torch)
+  Downloading https://download.pytorch.org/whl/cuda_pathfinder-1.2.2-py3-none-any.whl.metadata (3.2 kB)
+Collecting numpy (from torchvision)
+  Downloading numpy-2.3.5-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (62 kB)
+Collecting pillow!=8.3.*,>=5.3.0 (from torchvision)
+  Downloading pillow-12.0.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (8.8 kB)
+Collecting mpmath<1.4,>=1.1.0 (from sympy>=1.13.3->torch)
+  Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting MarkupSafe>=2.0 (from jinja2->torch)
+  Downloading https://download.pytorch.org/whl/MarkupSafe-3.0.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.0 kB)
+Downloading https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl (529.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 529.4/529.4 MB 2.5 MB/s  0:03:23
+Downloading https://download.pytorch.org/whl/cuda_bindings-13.0.3-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (11.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.7/11.7 MB 2.7 MB/s  0:00:04
+Downloading https://download.pytorch.org/whl/triton-3.6.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (176.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 176.1/176.1 MB 2.6 MB/s  0:01:06
+Downloading https://download.pytorch.org/whl/cuda_pathfinder-1.2.2-py3-none-any.whl (23 kB)
+Downloading https://download.pytorch.org/whl/cu130/torchvision-0.25.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl (7.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.8/7.8 MB 2.7 MB/s  0:00:02
+Downloading https://download.pytorch.org/whl/cu130/torchaudio-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl (1.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 2.7 MB/s  0:00:00
+Downloading fsspec-2025.12.0-py3-none-any.whl (201 kB)
+Downloading networkx-3.6.1-py3-none-any.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 2.8 MB/s  0:00:00
+Downloading pillow-12.0.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (6.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 2.7 MB/s  0:00:02
+Downloading sympy-1.14.0-py3-none-any.whl (6.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.3/6.3 MB 2.7 MB/s  0:00:02
+Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 2.8 MB/s  0:00:00
+Downloading https://download.pytorch.org/whl/typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Downloading filelock-3.20.0-py3-none-any.whl (16 kB)
+Downloading https://download.pytorch.org/whl/jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading https://download.pytorch.org/whl/MarkupSafe-3.0.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (24 kB)
+Downloading numpy-2.3.5-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (14.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.3/14.3 MB 2.7 MB/s  0:00:05
+Downloading https://download.pytorch.org/whl/setuptools-70.2.0-py3-none-any.whl (930 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 930.8/930.8 kB 2.7 MB/s  0:00:00
+Installing collected packages: nvidia-cusparselt-cu13, mpmath, typing-extensions, triton, sympy, setuptools, pillow, nvidia-nvtx, nvidia-nvshmem-cu13, nvidia-nvjitlink, nvidia-nccl-cu13, nvidia-curand, nvidia-cufile, nvidia-cuda-runtime, nvidia-cuda-nvrtc, nvidia-cuda-cupti, nvidia-cublas, numpy, networkx, MarkupSafe, fsspec, filelock, cuda-pathfinder, nvidia-cusparse, nvidia-cufft, nvidia-cudnn-cu13, jinja2, cuda-bindings, nvidia-cusolver, torch, torchvision, torchaudio
+
+Successfully installed MarkupSafe-3.0.2 cuda-bindings-13.0.3 cuda-pathfinder-1.2.2 filelock-3.20.0 fsspec-2025.12.0 jinja2-3.1.6 mpmath-1.3.0 networkx-3.6.1 numpy-2.3.5 nvidia-cublas-13.1.0.3 nvidia-cuda-cupti-13.0.85 nvidia-cuda-nvrtc-13.0.88 nvidia-cuda-runtime-13.0.96 nvidia-cudnn-cu13-9.15.1.9 nvidia-cufft-12.0.0.61 nvidia-cufile-1.15.1.6 nvidia-curand-10.4.0.35 nvidia-cusolver-12.0.4.66 nvidia-cusparse-12.6.3.3 nvidia-cusparselt-cu13-0.8.0 nvidia-nccl-cu13-2.28.9 nvidia-nvjitlink-13.0.88 nvidia-nvshmem-cu13-3.4.5 nvidia-nvtx-13.0.85 pillow-12.0.0 setuptools-70.2.0 sympy-1.14.0 torch-2.10.0+cu130 torchaudio-2.10.0+cu130 torchvision-0.25.0+cu130 triton-3.6.0 typing-extensions-4.15.0
+--> 660ba758d782
+STEP 8/90: RUN pip install xgrammar
+Collecting xgrammar
+  Downloading xgrammar-0.1.31-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl.metadata (7.0 kB)
+Collecting pydantic (from xgrammar)
+  Downloading pydantic-2.12.5-py3-none-any.whl.metadata (90 kB)
+Requirement already satisfied: torch>=1.10.0 in /opt/venv/lib/python3.12/site-packages (from xgrammar) (2.10.0+cu130)
+Collecting transformers>=4.38.0 (from xgrammar)
+  Downloading transformers-5.2.0-py3-none-any.whl.metadata (32 kB)
+Requirement already satisfied: numpy in /opt/venv/lib/python3.12/site-packages (from xgrammar) (2.3.5)
+Requirement already satisfied: typing-extensions>=4.9.0 in /opt/venv/lib/python3.12/site-packages (from xgrammar) (4.15.0)
+Requirement already satisfied: filelock in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (3.20.0)
+Requirement already satisfied: setuptools in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (70.2.0)
+Requirement already satisfied: sympy>=1.13.3 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (3.6.1)
+Requirement already satisfied: jinja2 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (2025.12.0)
+Requirement already satisfied: cuda-bindings==13.0.3 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.3)
+Requirement already satisfied: nvidia-cuda-nvrtc==13.0.88 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.88)
+Requirement already satisfied: nvidia-cuda-runtime==13.0.96 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.96)
+Requirement already satisfied: nvidia-cuda-cupti==13.0.85 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.85)
+Requirement already satisfied: nvidia-cudnn-cu13==9.15.1.9 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (9.15.1.9)
+Requirement already satisfied: nvidia-cublas==13.1.0.3 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.1.0.3)
+Requirement already satisfied: nvidia-cufft==12.0.0.61 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (12.0.0.61)
+Requirement already satisfied: nvidia-curand==10.4.0.35 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (10.4.0.35)
+Requirement already satisfied: nvidia-cusolver==12.0.4.66 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (12.0.4.66)
+Requirement already satisfied: nvidia-cusparse==12.6.3.3 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (12.6.3.3)
+Requirement already satisfied: nvidia-cusparselt-cu13==0.8.0 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (0.8.0)
+Requirement already satisfied: nvidia-nccl-cu13==2.28.9 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (2.28.9)
+Requirement already satisfied: nvidia-nvshmem-cu13==3.4.5 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (3.4.5)
+Requirement already satisfied: nvidia-nvtx==13.0.85 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.85)
+Requirement already satisfied: nvidia-nvjitlink==13.0.88 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (13.0.88)
+Requirement already satisfied: nvidia-cufile==1.15.1.6 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (1.15.1.6)
+Requirement already satisfied: triton==3.6.0 in /opt/venv/lib/python3.12/site-packages (from torch>=1.10.0->xgrammar) (3.6.0)
+Requirement already satisfied: cuda-pathfinder~=1.1 in /opt/venv/lib/python3.12/site-packages (from cuda-bindings==13.0.3->torch>=1.10.0->xgrammar) (1.2.2)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /opt/venv/lib/python3.12/site-packages (from sympy>=1.13.3->torch>=1.10.0->xgrammar) (1.3.0)
+Collecting huggingface-hub<2.0,>=1.3.0 (from transformers>=4.38.0->xgrammar)
+  Downloading huggingface_hub-1.4.1-py3-none-any.whl.metadata (13 kB)
+Collecting packaging>=20.0 (from transformers>=4.38.0->xgrammar)
+  Downloading packaging-26.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pyyaml>=5.1 (from transformers>=4.38.0->xgrammar)
+  Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (2.4 kB)
+Collecting regex!=2019.12.17 (from transformers>=4.38.0->xgrammar)
+  Downloading regex-2026.2.19-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (40 kB)
+Collecting tokenizers<=0.23.0,>=0.22.0 (from transformers>=4.38.0->xgrammar)
+  Downloading tokenizers-0.22.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (7.3 kB)
+Collecting typer-slim (from transformers>=4.38.0->xgrammar)
+  Downloading typer_slim-0.24.0-py3-none-any.whl.metadata (4.2 kB)
+Collecting safetensors>=0.4.3 (from transformers>=4.38.0->xgrammar)
+  Downloading safetensors-0.7.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (4.1 kB)
+Collecting tqdm>=4.27 (from transformers>=4.38.0->xgrammar)
+  Downloading tqdm-4.67.3-py3-none-any.whl.metadata (57 kB)
+Collecting hf-xet<2.0.0,>=1.2.0 (from huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading hf_xet-1.2.0-cp37-abi3-manylinux_2_28_aarch64.whl.metadata (4.9 kB)
+Collecting httpx<1,>=0.23.0 (from huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting shellingham (from huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting anyio (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading anyio-4.12.1-py3-none-any.whl.metadata (4.3 kB)
+Collecting certifi (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading certifi-2026.1.4-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting idna (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers>=4.38.0->xgrammar)
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Requirement already satisfied: MarkupSafe>=2.0 in /opt/venv/lib/python3.12/site-packages (from jinja2->torch>=1.10.0->xgrammar) (3.0.2)
+Collecting annotated-types>=0.6.0 (from pydantic->xgrammar)
+  Downloading annotated_types-0.7.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.41.5 (from pydantic->xgrammar)
+  Downloading pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (7.3 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic->xgrammar)
+  Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting typer>=0.24.0 (from typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading typer-0.24.0-py3-none-any.whl.metadata (16 kB)
+Collecting click>=8.2.1 (from typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading click-8.3.1-py3-none-any.whl.metadata (2.6 kB)
+Collecting rich>=12.3.0 (from typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading rich-14.3.3-py3-none-any.whl.metadata (18 kB)
+Collecting annotated-doc>=0.0.2 (from typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+Collecting markdown-it-py>=2.2.0 (from rich>=12.3.0->typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading markdown_it_py-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+Collecting pygments<3.0.0,>=2.13.0 (from rich>=12.3.0->typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=12.3.0->typer>=0.24.0->typer-slim->transformers>=4.38.0->xgrammar)
+  Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Downloading xgrammar-0.1.31-cp312-cp312-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl (33.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 33.2/33.2 MB 2.6 MB/s  0:00:12
+Downloading transformers-5.2.0-py3-none-any.whl (10.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.4/10.4 MB 2.7 MB/s  0:00:03
+Downloading huggingface_hub-1.4.1-py3-none-any.whl (553 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 553.3/553.3 kB 2.8 MB/s  0:00:00
+Downloading hf_xet-1.2.0-cp37-abi3-manylinux_2_28_aarch64.whl (3.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 2.7 MB/s  0:00:01
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading tokenizers-0.22.2-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (3.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 2.7 MB/s  0:00:01
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading packaging-26.0-py3-none-any.whl (74 kB)
+Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (775 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 775.1/775.1 kB 2.7 MB/s  0:00:00
+Downloading regex-2026.2.19-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (798 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 798.8/798.8 kB 2.8 MB/s  0:00:00
+Downloading safetensors-0.7.0-cp38-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (491 kB)
+Downloading tqdm-4.67.3-py3-none-any.whl (78 kB)
+Downloading anyio-4.12.1-py3-none-any.whl (113 kB)
+Downloading idna-3.11-py3-none-any.whl (71 kB)
+Downloading certifi-2026.1.4-py3-none-any.whl (152 kB)
+Downloading pydantic-2.12.5-py3-none-any.whl (463 kB)
+Downloading pydantic_core-2.41.5-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (1.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.9/1.9 MB 2.7 MB/s  0:00:00
+Downloading annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Downloading typer_slim-0.24.0-py3-none-any.whl (3.4 kB)
+Downloading typer-0.24.0-py3-none-any.whl (56 kB)
+Downloading annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+Downloading click-8.3.1-py3-none-any.whl (108 kB)
+Downloading rich-14.3.3-py3-none-any.whl (310 kB)
+Downloading pygments-2.19.2-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 2.9 MB/s  0:00:00
+Downloading markdown_it_py-4.0.0-py3-none-any.whl (87 kB)
+Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Installing collected packages: typing-inspection, tqdm, shellingham, safetensors, regex, pyyaml, pygments, pydantic-core, packaging, mdurl, idna, hf-xet, h11, click, certifi, annotated-types, annotated-doc, pydantic, markdown-it-py, httpcore, anyio, rich, httpx, typer, typer-slim, huggingface-hub, tokenizers, transformers, xgrammar
+
+Successfully installed annotated-doc-0.0.4 annotated-types-0.7.0 anyio-4.12.1 certifi-2026.1.4 click-8.3.1 h11-0.16.0 hf-xet-1.2.0 httpcore-1.0.9 httpx-0.28.1 huggingface-hub-1.4.1 idna-3.11 markdown-it-py-4.0.0 mdurl-0.1.2 packaging-26.0 pydantic-2.12.5 pydantic-core-2.41.5 pygments-2.19.2 pyyaml-6.0.3 regex-2026.2.19 rich-14.3.3 safetensors-0.7.0 shellingham-1.5.4 tokenizers-0.22.2 tqdm-4.67.3 transformers-5.2.0 typer-0.24.0 typer-slim-0.24.0 typing-inspection-0.4.2 xgrammar-0.1.31
+--> b1e745371d1e
+STEP 9/90: RUN pip install flashinfer-python --pre
+Collecting flashinfer-python
+  Downloading flashinfer_python-0.6.4-py3-none-any.whl.metadata (10 kB)
+Collecting apache-tvm-ffi!=0.1.8,!=0.1.8.post0,<0.2,>=0.1.6 (from flashinfer-python)
+  Downloading apache_tvm_ffi-0.1.9rc1-cp312-abi3-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (6.1 kB)
+Requirement already satisfied: click in /opt/venv/lib/python3.12/site-packages (from flashinfer-python) (8.3.1)
+Collecting einops (from flashinfer-python)
+  Downloading einops-0.8.2-py3-none-any.whl.metadata (13 kB)
+Collecting ninja (from flashinfer-python)
+  Downloading ninja-1.13.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (5.1 kB)
+Requirement already satisfied: numpy in /opt/venv/lib/python3.12/site-packages (from flashinfer-python) (2.3.5)
+Collecting nvidia-cudnn-frontend>=1.13.0 (from flashinfer-python)
+  Downloading nvidia_cudnn_frontend-1.18.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (4.4 kB)
+Collecting nvidia-cutlass-dsl>=4.3.4 (from flashinfer-python)
+  Downloading nvidia_cutlass_dsl-4.4.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting nvidia-ml-py (from flashinfer-python)
+  Downloading nvidia_ml_py-13.590.48-py3-none-any.whl.metadata (9.8 kB)
+Requirement already satisfied: packaging>=24.2 in /opt/venv/lib/python3.12/site-packages (from flashinfer-python) (26.0)
+Collecting requests (from flashinfer-python)
+  Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting tabulate (from flashinfer-python)
+  Downloading tabulate-0.9.0-py3-none-any.whl.metadata (34 kB)
+Requirement already satisfied: torch in /opt/venv/lib/python3.12/site-packages (from flashinfer-python) (2.10.0+cu130)
+Requirement already satisfied: tqdm in /opt/venv/lib/python3.12/site-packages (from flashinfer-python) (4.67.3)
+Requirement already satisfied: typing-extensions>=4.5 in /opt/venv/lib/python3.12/site-packages (from apache-tvm-ffi!=0.1.8,!=0.1.8.post0,<0.2,>=0.1.6->flashinfer-python) (4.15.0)
+Collecting nvidia-cutlass-dsl-libs-base==4.4.0 (from nvidia-cutlass-dsl>=4.3.4->flashinfer-python)
+  Downloading nvidia_cutlass_dsl_libs_base-4.4.0-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (2.6 kB)
+Collecting cuda-python>=12.8 (from nvidia-cutlass-dsl-libs-base==4.4.0->nvidia-cutlass-dsl>=4.3.4->flashinfer-python)
+  Downloading cuda_python-13.1.1-py3-none-any.whl.metadata (6.2 kB)
+Collecting cuda-bindings~=13.1.1 (from cuda-python>=12.8->nvidia-cutlass-dsl-libs-base==4.4.0->nvidia-cutlass-dsl>=4.3.4->flashinfer-python)
+  Downloading cuda_bindings-13.1.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (2.3 kB)
+Requirement already satisfied: cuda-pathfinder~=1.1 in /opt/venv/lib/python3.12/site-packages (from cuda-python>=12.8->nvidia-cutlass-dsl-libs-base==4.4.0->nvidia-cutlass-dsl>=4.3.4->flashinfer-python) (1.2.2)
+Collecting charset_normalizer<4,>=2 (from requests->flashinfer-python)
+  Downloading charset_normalizer-3.4.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (37 kB)
+Requirement already satisfied: idna<4,>=2.5 in /opt/venv/lib/python3.12/site-packages (from requests->flashinfer-python) (3.11)
+Collecting urllib3<3,>=1.21.1 (from requests->flashinfer-python)
+  Downloading urllib3-2.6.3-py3-none-any.whl.metadata (6.9 kB)
+Requirement already satisfied: certifi>=2017.4.17 in /opt/venv/lib/python3.12/site-packages (from requests->flashinfer-python) (2026.1.4)
+Requirement already satisfied: filelock in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (3.20.0)
+Requirement already satisfied: setuptools in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (70.2.0)
+Requirement already satisfied: sympy>=1.13.3 in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (3.6.1)
+Requirement already satisfied: jinja2 in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in /opt/venv/lib/python3.12/site-packages (from torch->flashinfer-python) (2025.12.0)
+INFO: pip is looking at multiple versions of torch to determine which version is compatible with other requirements. This could take a while.
+Collecting torch (from flashinfer-python)
+  Downloading torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (31 kB)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /opt/venv/lib/python3.12/site-packages (from sympy>=1.13.3->torch->flashinfer-python) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /opt/venv/lib/python3.12/site-packages (from jinja2->torch->flashinfer-python) (3.0.2)
+Downloading flashinfer_python-0.6.4-py3-none-any.whl (7.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.8/7.8 MB 2.7 MB/s  0:00:02
+Downloading apache_tvm_ffi-0.1.9rc1-cp312-abi3-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 2.7 MB/s  0:00:00
+Downloading nvidia_cudnn_frontend-1.18.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (2.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 2.7 MB/s  0:00:00
+Downloading nvidia_cutlass_dsl-4.4.0-py3-none-any.whl (10 kB)
+Downloading nvidia_cutlass_dsl_libs_base-4.4.0-cp312-cp312-manylinux_2_28_aarch64.whl (75.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 75.5/75.5 MB 2.7 MB/s  0:00:28
+Downloading cuda_python-13.1.1-py3-none-any.whl (8.0 kB)
+Downloading cuda_bindings-13.1.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (15.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.5/15.5 MB 2.7 MB/s  0:00:05
+Downloading einops-0.8.2-py3-none-any.whl (65 kB)
+Downloading ninja-1.13.0-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (177 kB)
+Downloading nvidia_ml_py-13.590.48-py3-none-any.whl (50 kB)
+Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+Downloading charset_normalizer-3.4.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (148 kB)
+Downloading urllib3-2.6.3-py3-none-any.whl (131 kB)
+Downloading tabulate-0.9.0-py3-none-any.whl (35 kB)
+Downloading torch-2.10.0-cp312-cp312-manylinux_2_28_aarch64.whl (146.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 146.0/146.0 MB 2.7 MB/s  0:00:54
+Installing collected packages: nvidia-ml-py, urllib3, tabulate, nvidia-cudnn-frontend, ninja, einops, cuda-bindings, charset_normalizer, apache-tvm-ffi, torch, requests, cuda-python, nvidia-cutlass-dsl-libs-base, nvidia-cutlass-dsl, flashinfer-python
+  Attempting uninstall: cuda-bindings
+    Found existing installation: cuda-bindings 13.0.3
+    Uninstalling cuda-bindings-13.0.3:
+      Successfully uninstalled cuda-bindings-13.0.3
+  Attempting uninstall: torch
+    Found existing installation: torch 2.10.0+cu130
+    Uninstalling torch-2.10.0+cu130:
+      Successfully uninstalled torch-2.10.0+cu130
+
+Successfully installed apache-tvm-ffi-0.1.9rc1 charset_normalizer-3.4.4 cuda-bindings-13.1.1 cuda-python-13.1.1 einops-0.8.2 flashinfer-python-0.6.4 ninja-1.13.0 nvidia-cudnn-frontend-1.18.0 nvidia-cutlass-dsl-4.4.0 nvidia-cutlass-dsl-libs-base-4.4.0 nvidia-ml-py-13.590.48 requests-2.32.5 tabulate-0.9.0 torch-2.10.0 urllib3-2.6.3
+--> 8473ab372c4b
+STEP 10/90: ENV PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu130
+--> 739c51de6023
+STEP 11/90: RUN pip install torch==2.10.0+cu130 torchvision==0.25.0+cu130 torchaudio==2.10.0+cu130
+Looking in indexes: https://pypi.org/simple, https://download.pytorch.org/whl/cu130
+Collecting torch==2.10.0+cu130
+  Using cached https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (30 kB)
+Requirement already satisfied: torchvision==0.25.0+cu130 in /opt/venv/lib/python3.12/site-packages (0.25.0+cu130)
+Requirement already satisfied: torchaudio==2.10.0+cu130 in /opt/venv/lib/python3.12/site-packages (2.10.0+cu130)
+Requirement already satisfied: filelock in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (3.20.0)
+Requirement already satisfied: typing-extensions>=4.10.0 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (4.15.0)
+Requirement already satisfied: setuptools in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (70.2.0)
+Requirement already satisfied: sympy>=1.13.3 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (3.6.1)
+Requirement already satisfied: jinja2 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (2025.12.0)
+Collecting cuda-bindings==13.0.3 (from torch==2.10.0+cu130)
+  Using cached https://download.pytorch.org/whl/cuda_bindings-13.0.3-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl.metadata (2.3 kB)
+Requirement already satisfied: nvidia-cuda-nvrtc==13.0.88 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.0.88)
+Requirement already satisfied: nvidia-cuda-runtime==13.0.96 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.0.96)
+Requirement already satisfied: nvidia-cuda-cupti==13.0.85 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.0.85)
+Requirement already satisfied: nvidia-cudnn-cu13==9.15.1.9 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (9.15.1.9)
+Requirement already satisfied: nvidia-cublas==13.1.0.3 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.1.0.3)
+Requirement already satisfied: nvidia-cufft==12.0.0.61 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (12.0.0.61)
+Requirement already satisfied: nvidia-curand==10.4.0.35 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (10.4.0.35)
+Requirement already satisfied: nvidia-cusolver==12.0.4.66 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (12.0.4.66)
+Requirement already satisfied: nvidia-cusparse==12.6.3.3 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (12.6.3.3)
+Requirement already satisfied: nvidia-cusparselt-cu13==0.8.0 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (0.8.0)
+Requirement already satisfied: nvidia-nccl-cu13==2.28.9 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (2.28.9)
+Requirement already satisfied: nvidia-nvshmem-cu13==3.4.5 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (3.4.5)
+Requirement already satisfied: nvidia-nvtx==13.0.85 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.0.85)
+Requirement already satisfied: nvidia-nvjitlink==13.0.88 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (13.0.88)
+Requirement already satisfied: nvidia-cufile==1.15.1.6 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (1.15.1.6)
+Requirement already satisfied: triton==3.6.0 in /opt/venv/lib/python3.12/site-packages (from torch==2.10.0+cu130) (3.6.0)
+Requirement already satisfied: numpy in /opt/venv/lib/python3.12/site-packages (from torchvision==0.25.0+cu130) (2.3.5)
+Requirement already satisfied: pillow!=8.3.*,>=5.3.0 in /opt/venv/lib/python3.12/site-packages (from torchvision==0.25.0+cu130) (12.0.0)
+Requirement already satisfied: cuda-pathfinder~=1.1 in /opt/venv/lib/python3.12/site-packages (from cuda-bindings==13.0.3->torch==2.10.0+cu130) (1.2.2)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /opt/venv/lib/python3.12/site-packages (from sympy>=1.13.3->torch==2.10.0+cu130) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /opt/venv/lib/python3.12/site-packages (from jinja2->torch==2.10.0+cu130) (3.0.2)
+Using cached https://download.pytorch.org/whl/cu130/torch-2.10.0%2Bcu130-cp312-cp312-manylinux_2_28_aarch64.whl (529.4 MB)
+Using cached https://download.pytorch.org/whl/cuda_bindings-13.0.3-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl (11.7 MB)
+Installing collected packages: cuda-bindings, torch
+  Attempting uninstall: cuda-bindings
+    Found existing installation: cuda-bindings 13.1.1
+    Uninstalling cuda-bindings-13.1.1:
+      Successfully uninstalled cuda-bindings-13.1.1
+  Attempting uninstall: torch
+    Found existing installation: torch 2.10.0
+    Uninstalling torch-2.10.0:
+      Successfully uninstalled torch-2.10.0
+
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+cuda-python 13.1.1 requires cuda-bindings~=13.1.1, but you have cuda-bindings 13.0.3 which is incompatible.
+Successfully installed cuda-bindings-13.0.3 torch-2.10.0+cu130
+--> 37f2a764e46c
+STEP 12/90: RUN git clone https://github.com/vllm-project/vllm.git &&     cd vllm && git checkout 3b30e6150777de549b11f67dde3ecc0d3b1f3f50
+Cloning into 'vllm'...
+Note: switching to '3b30e6150777de549b11f67dde3ecc0d3b1f3f50'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 3b30e6150 [NemotronH] Do not force router to run in fp32 (#34582)
+--> 7f10aff42f77
+STEP 13/90: WORKDIR /app/vllm
+--> ed85dac46504
+STEP 14/90: RUN python3 use_existing_torch.py
+>>> removed from requirements/xpu.txt: --extra-index-url=https://download.pytorch.org/whl/xpu
+>>> removed from requirements/xpu.txt: torch==2.10.0+xpu
+>>> removed from requirements/xpu.txt: torchaudio
+>>> removed from requirements/xpu.txt: torchvision
+>>> removed from requirements/rocm-build.txt: --extra-index-url https://download.pytorch.org/whl/test/rocm7.0
+>>> removed from requirements/rocm-build.txt: torch==2.10.0
+>>> removed from requirements/rocm-build.txt: torchvision==0.25.0
+>>> removed from requirements/rocm-build.txt: torchaudio==2.10.0
+>>> removed from requirements/cuda.txt: torch==2.10.0
+>>> removed from requirements/cuda.txt: torchaudio==2.10.0
+>>> removed from requirements/cuda.txt: # These must be updated alongside torch
+>>> removed from requirements/cuda.txt: torchvision==0.25.0 # Required for phi3v processor. See https://github.com/pytorch/vision?tab=readme-ov-file#installation for corresponding version
+>>> removed from requirements/rocm-test.txt: torchgeo==0.7.0
+>>> removed from requirements/rocm-test.txt: # via terratorch
+>>> removed from requirements/rocm-test.txt: open-clip-torch==2.32.0
+>>> removed from requirements/rocm-test.txt: terratorch==1.2.2
+>>> removed from requirements/rocm-test.txt: segmentation-models-pytorch==0.5.0
+>>> removed from requirements/test.txt: #    uv pip compile requirements/test.in -o requirements/test.txt --index-strategy unsafe-best-match --torch-backend cu129 --python-platform x86_64-manylinux_2_28 --python-version 3.12
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   vector-quantize-pytorch
+>>> removed from requirements/test.txt: # via vector-quantize-pytorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via open-clip-torch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: open-clip-torch==2.32.0
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: pytorch-lightning==2.5.2
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: segmentation-models-pytorch==0.5.0
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: terratorch==1.2.2
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: torch==2.10.0+cu129
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchaudio
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: #   vector-quantize-pytorch
+>>> removed from requirements/test.txt: torchaudio==2.10.0+cu129
+>>> removed from requirements/test.txt: torchgeo==0.7.0
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: torchmetrics==1.7.4
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: torchvision==0.25.0+cu129
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: vector-quantize-pytorch==1.21.2
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/cpu.txt: torch==2.10.0+cpu; platform_machine == "x86_64" or platform_machine == "s390x"
+>>> removed from requirements/cpu.txt: torch==2.10.0; platform_machine == "aarch64" or platform_system == "Darwin" or platform_machine == "ppc64le"
+>>> removed from requirements/cpu.txt: # required for the image processor of minicpm-o-2_6, this must be updated alongside torch
+>>> removed from requirements/cpu.txt: torchaudio; platform_machine != "s390x"
+>>> removed from requirements/cpu.txt: # required for the image processor of phi3v, this must be updated alongside torch
+>>> removed from requirements/cpu.txt: torchvision; platform_machine != "s390x"
+>>> removed from requirements/cpu.txt: # Intel Extension for PyTorch, only for x86_64 CPUs
+>>> removed from requirements/build.txt: torch==2.10.0
+>>> removed from requirements/cpu-build.txt: torch==2.10.0+cpu; platform_machine == "x86_64" or platform_machine == "s390x"
+>>> removed from requirements/cpu-build.txt: torch==2.10.0; platform_machine == "aarch64" or platform_system == "Darwin" or platform_machine == "ppc64le"
+>>> removed from requirements/test.in: vector_quantize_pytorch # required for minicpmo_26 test
+>>> removed from requirements/test.in: torch==2.10.0
+>>> removed from requirements/test.in: torchaudio==2.10.0
+>>> removed from requirements/test.in: torchvision==0.25.0
+>>> removed from requirements/test.in: open_clip_torch==2.32.0 # Required for nemotron_vl test, Nemotron Parse in test_common.py
+>>> removed from requirements/test.in: terratorch >= 1.2.2 # Required for Prithvi tests
+>>> removed from requirements/test.in: segmentation-models-pytorch > 0.4.0 # Required for Prithvi tests
+>>> removed from requirements/test.in: # Newer versions of datasets require torchcoded, that makes the tests fail in CI because of a missing library.
+>>> removed from requirements/test.in: # Older versions are in conflict with teerratorch requirements.
+>>> removed from pyproject.toml: "torch == 2.10.0",
+>>> removed from pyproject.toml: no-build-isolation-package = ["torch"]
+--> 944fdf41f622
+STEP 15/90: RUN pip install -r requirements/build.txt
+Looking in indexes: https://pypi.org/simple, https://download.pytorch.org/whl/cu130
+Collecting cmake>=3.26.1 (from -r requirements/build.txt (line 2))
+  Downloading cmake-4.2.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (6.5 kB)
+Requirement already satisfied: ninja in /opt/venv/lib/python3.12/site-packages (from -r requirements/build.txt (line 3)) (1.13.0)
+Requirement already satisfied: packaging>=24.2 in /opt/venv/lib/python3.12/site-packages (from -r requirements/build.txt (line 4)) (26.0)
+Collecting setuptools<81.0.0,>=77.0.3 (from -r requirements/build.txt (line 5))
+  Downloading setuptools-80.10.2-py3-none-any.whl.metadata (6.6 kB)
+Collecting setuptools-scm>=8 (from -r requirements/build.txt (line 6))
+  Downloading setuptools_scm-9.2.2-py3-none-any.whl.metadata (7.7 kB)
+Collecting wheel (from -r requirements/build.txt (line 7))
+  Downloading wheel-0.46.3-py3-none-any.whl.metadata (2.4 kB)
+Requirement already satisfied: jinja2>=3.1.6 in /opt/venv/lib/python3.12/site-packages (from -r requirements/build.txt (line 8)) (3.1.6)
+Requirement already satisfied: regex in /opt/venv/lib/python3.12/site-packages (from -r requirements/build.txt (line 9)) (2026.2.19)
+Collecting build (from -r requirements/build.txt (line 10))
+  Downloading build-1.4.0-py3-none-any.whl.metadata (5.8 kB)
+Collecting protobuf!=6.30.*,!=6.31.*,!=6.32.*,!=6.33.0.*,!=6.33.1.*,!=6.33.2.*,!=6.33.3.*,!=6.33.4.*,>=5.29.6 (from -r requirements/build.txt (line 11))
+  Downloading protobuf-6.33.5-cp39-abi3-manylinux2014_aarch64.whl.metadata (593 bytes)
+Collecting grpcio-tools==1.78.0 (from -r requirements/build.txt (line 12))
+  Downloading grpcio_tools-1.78.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (5.3 kB)
+Collecting grpcio>=1.78.0 (from grpcio-tools==1.78.0->-r requirements/build.txt (line 12))
+  Downloading grpcio-1.78.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (3.8 kB)
+Requirement already satisfied: MarkupSafe>=2.0 in /opt/venv/lib/python3.12/site-packages (from jinja2>=3.1.6->-r requirements/build.txt (line 8)) (3.0.2)
+Collecting pyproject_hooks (from build->-r requirements/build.txt (line 10))
+  Downloading pyproject_hooks-1.2.0-py3-none-any.whl.metadata (1.3 kB)
+Requirement already satisfied: typing-extensions~=4.12 in /opt/venv/lib/python3.12/site-packages (from grpcio>=1.78.0->grpcio-tools==1.78.0->-r requirements/build.txt (line 12)) (4.15.0)
+Downloading grpcio_tools-1.78.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (2.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.6/2.6 MB 2.7 MB/s  0:00:00
+Downloading setuptools-80.10.2-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 2.7 MB/s  0:00:00
+Downloading protobuf-6.33.5-cp39-abi3-manylinux2014_aarch64.whl (324 kB)
+Downloading cmake-4.2.1-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (29.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 29.1/29.1 MB 2.7 MB/s  0:00:10
+Downloading setuptools_scm-9.2.2-py3-none-any.whl (62 kB)
+Downloading wheel-0.46.3-py3-none-any.whl (30 kB)
+Downloading build-1.4.0-py3-none-any.whl (24 kB)
+Downloading grpcio-1.78.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (6.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.5/6.5 MB 2.7 MB/s  0:00:02
+Downloading pyproject_hooks-1.2.0-py3-none-any.whl (10 kB)
+Installing collected packages: wheel, setuptools, pyproject_hooks, protobuf, grpcio, cmake, setuptools-scm, grpcio-tools, build
+  Attempting uninstall: setuptools
+    Found existing installation: setuptools 70.2.0
+    Uninstalling setuptools-70.2.0:
+      Successfully uninstalled setuptools-70.2.0
+
+Successfully installed build-1.4.0 cmake-4.2.1 grpcio-1.78.1 grpcio-tools-1.78.0 protobuf-6.33.5 pyproject_hooks-1.2.0 setuptools-80.10.2 setuptools-scm-9.2.2 wheel-0.46.3
+--> 5dc7b8904ce9
+STEP 16/90: COPY nv_fp4_dummy.h /usr/local/cuda/include/nv_fp4_dummy.h
+--> 2c88831ba85e
+STEP 17/90: COPY patch_cccl_fp4.sh /tmp/patch_cccl_fp4.sh
+--> 6dd71093e1e1
+STEP 18/90: RUN chmod +x /tmp/patch_cccl_fp4.sh && /tmp/patch_cccl_fp4.sh
+================================
+  Patching CCCL for FP4 Support
+================================
+Found CCCL header: /usr/local/cuda/include/cccl/cuda/std/__type_traits/is_extended_floating_point.h
+Adding FP4 type definitions...
+✅ CCCL header patched successfully
+
+--> 9f562c84bb57
+STEP 19/90: RUN if [ -f CMakeLists.txt ]; then     sed -i 's/set(CUDA_SUPPORTED_ARCHS "7\.5;8\.0;8\.6;8\.7;8\.9;9\.0;10\.0;11\.0;12\.0")/set(CUDA_SUPPORTED_ARCHS "7.5;8.0;8.6;8.7;8.9;9.0;10.0;11.0;12.0;12.1")/g' CMakeLists.txt &&     sed -i 's/cuda_archs_loose_intersection(SCALED_MM_ARCHS "10\.0f;11\.0f"/cuda_archs_loose_intersection(SCALED_MM_ARCHS "10.0f;11.0f;12.0f;12.1f"/g' CMakeLists.txt &&     sed -i 's/cuda_archs_loose_intersection(MLA_ARCHS "10\.0f;11\.0f;12\.0f"/cuda_archs_loose_intersection(MLA_ARCHS "10.0f;11.0f;12.0f;12.1f"/g' CMakeLists.txt &&     sed -i 's/cuda_archs_loose_intersection(CUTLASS_MOE_DATA_ARCHS "9\.0a;10\.0f;11\.0f;12\.0f"/cuda_archs_loose_intersection(CUTLASS_MOE_DATA_ARCHS "9.0a;10.0f;11.0f;12.0f;12.1f"/g' CMakeLists.txt; fi
+--> 8c8473567432
+STEP 20/90: COPY grouped_mm_gb10_native.cu /workspace/dgx-vllm-build/grouped_mm_gb10_native.cu
+--> aaa8f7be52ec
+STEP 21/90: COPY scaled_mm_sm121_fp8.cu /workspace/dgx-vllm-build/scaled_mm_sm121_fp8.cu
+--> 44fd220b1d63
+STEP 22/90: COPY scaled_mm_blockwise_sm121_fp8.cu /workspace/dgx-vllm-build/scaled_mm_blockwise_sm121_fp8.cu
+--> 735a4f508e38
+STEP 23/90: COPY scaled_mm_sm121_fp8_dispatch.cuh /workspace/dgx-vllm-build/scaled_mm_sm121_fp8_dispatch.cuh
+--> 3fd3b566291e
+STEP 24/90: COPY scaled_mm_blockwise_sm121_fp8_dispatch.cuh /workspace/dgx-vllm-build/scaled_mm_blockwise_sm121_fp8_dispatch.cuh
+--> e52695e8d27c
+STEP 25/90: COPY scaled_mm_c3x_sm121.cu /workspace/dgx-vllm-build/scaled_mm_c3x_sm121.cu
+--> 0e877c26871f
+STEP 26/90: COPY fix_dispatcher_v2.sh /workspace/dgx-vllm-build/fix_dispatcher_v2.sh
+--> 3c1e830a7e4f
+STEP 27/90: COPY integrate_gb10_sm121.sh .
+--> fc924f884822
+STEP 28/90: RUN chmod +x integrate_gb10_sm121.sh && ./integrate_gb10_sm121.sh
+============================================================================
+Integrating Native SM_121 Kernels for GB10 (DGX Spark)
+============================================================================
+
+This integration provides TRUE SM_121 kernels optimized for GB10:
+  • Native scaled_mm implementation (not SM89/SM100 fallback)
+  • Native MoE implementation
+  • Hardware-optimized for 301 GB/s LPDDR5X unified memory
+  • ClusterShape 1x1x1 (no multicast dependencies)
+
+[1/5] SKIPPING custom GB10 MoE kernel...
+   Strategy: Let SM_121 use standard SM100 MOE kernels
+   GB10 IS Blackwell - SM100 kernels should work!
+Using direct csrc/ structure
+✓ Will use SM100 MOE kernels for SM_121
+[2/5] Copying SM_121 scaled_mm kernels...
+✓ Copied kernel implementations
+✓ Copied dispatch headers
+✓ Copied entry point
+[2b/6] Adding SM121 forward declarations to scaled_mm_kernels.hpp...
+✓ Added SM121 forward declarations to csrc/quantization/w8a8/cutlass/c3x/scaled_mm_kernels.hpp
+[3/6] Updating CMakeLists.txt...
+   Skipping custom GB10 MoE kernel - will use SM100
+SM_121 section appended to end of CMakeLists.txt (fallback)
+Added SM_121 scaled_mm kernels to CMake
+[4/6] Updating C++ dispatcher (NO custom GB10 routing)...
+   SM_121 will use standard SM100 code path
+✓ Dispatcher will treat SM_121 like SM_100
+[5/6] Updating Python dispatcher to accept capability 121...
+
+[6/6] Verifying Integration...
+============================================================================
+Checking kernel files...
+✓ SM_121 FP8 kernel
+✓ SM_121 entry point
+Checking header forward declarations...
+✓ SM_121 forward declarations in scaled_mm_kernels.hpp
+Checking CMake configuration...
+SM_121 CMake configuration present
+Checking dispatcher...
+✓ SM_121 will use SM100 MOE kernels (no custom routing)
+
+============================================================================
+✓ GB10 Native SM_121 Kernel Integration Complete!
+============================================================================
+
+Summary:
+  • SM_121 scaled_mm kernels: csrc/quantization/cutlass_w8a8/c3x/scaled_mm_sm121_*.cu
+  • Build flags: -DENABLE_SCALED_MM_SM121=1
+  • Target architectures: 12.0f, 12.1f
+  • MOE Strategy: SM_121 uses STANDARD SM100 MOE kernels
+  • Rationale: GB10 IS Blackwell - SM100 kernels should work!
+
+Next steps:
+  1. Build vLLM with 'pip install -e .' or Docker image build
+  2. Test with Qwen3-Next-80B-A3B-Instruct-FP8-Dynamic
+  3. SM100 MOE kernels should work on GB10!
+
+STRATEGY: Use proven SM100 kernels - no custom GB10 code!
+
+--> 2b9d41bbafa1
+STEP 29/90: COPY integrate_sm121_fp8_fix_v2.sh /workspace/dgx-vllm-build/integrate_sm121_fp8_fix_v2.sh
+--> eeb4bbf91957
+STEP 30/90: RUN chmod +x /workspace/dgx-vllm-build/integrate_sm121_fp8_fix_v2.sh &&     /workspace/dgx-vllm-build/integrate_sm121_fp8_fix_v2.sh
+╔════════════════════════════════════════════════════════════╗
+║           SM_121 FP8 Backend Fix (Updated)                ║
+╚════════════════════════════════════════════════════════════╝
+
+✓ Found: /app/vllm/vllm/model_executor/layers/quantization/kernels/scaled_mm/cutlass.py
+
+Patching CutlassFP8ScaledMMLinearKernel.is_supported()...
+✓ Patched /app/vllm/vllm/model_executor/layers/quantization/kernels/scaled_mm/cutlass.py at line 150
+
+Verifying patch...
+✅ Patch applied successfully!
+
+Backend selection for SM_121:
+  - CUTLASS: Disabled (runtime incompatibility)
+  - PyTorch (torch._scaled_mm): Will be used as fallback
+
+╔════════════════════════════════════════════════════════════╗
+║          SM_121 FP8 Fix Applied Successfully              ║
+╚════════════════════════════════════════════════════════════╝
+--> 9333491cf372
+STEP 31/90: COPY fix_cmake_sm120_archs_v113_corrected.sh /workspace/dgx-vllm-build/fix_cmake_sm120_archs_v113_corrected.sh
+--> 12cbbe02a555
+STEP 32/90: RUN chmod +x /workspace/dgx-vllm-build/fix_cmake_sm120_archs_v113_corrected.sh &&     /workspace/dgx-vllm-build/fix_cmake_sm120_archs_v113_corrected.sh
+════════════════════════════════════════════════════════════
+CMAKE SM_120 ARCHITECTURE FIX (Pattern-based, v17)
+════════════════════════════════════════════════════════════
+
+PURPOSE:
+  The SCALED_MM_ARCHS for SM_120 only lists "12.0f" (CUDA >= 13.0 branch)
+  GB10 is compute 12.1 so needs "12.1f" added to be included.
+
+  Uses PATTERN-BASED sed (not hardcoded line numbers) for resilience.
+
+════════════════════════════════════════════════════════════
+
+Fixing CMakeLists.txt...
+
+Backup created: /app/vllm/CMakeLists.txt.sm120_arch.backup
+CUDA >= 13.0 branch: Changed 1 instance(s) from "12.0f" to "12.0f;12.1f"
+CUDA < 13.0 branch:  Changed 1 instance(s) from "12.0a" to "12.0a;12.1a"
+
+Verification:
+  PASS: 12.1f present in SCALED_MM_ARCHS (CUDA >= 13.0 branch)
+  PASS: 12.1a present in SCALED_MM_ARCHS (CUDA < 13.0 branch)
+
+Expected CMake output:
+  'Building scaled_mm_c3x_sm120 for archs: 12.1f'
+
+════════════════════════════════════════════════════════════
+--> c7cee74cf284
+STEP 33/90: COPY fix_capability_121_v112.py /workspace/dgx-vllm-build/fix_capability_121_v112.py
+--> 1847bc5f55ae
+STEP 34/90: RUN chmod +x /workspace/dgx-vllm-build/fix_capability_121_v112.py &&     python3 /workspace/dgx-vllm-build/fix_capability_121_v112.py /app/vllm
+======================================================================
+Capability 121 Routing Fix (v17 simplified)
+======================================================================
+vLLM root: /app/vllm
+
+Patching: /app/vllm/csrc/quantization/w8a8/cutlass/scaled_mm_entry.cu
+  Added upper bound to 1 >= 120 check(s)
+  Updated 1 error message(s)
+  Applied 2 modification(s)
+
+Capability 121 will now route to SM_120 kernels.
+======================================================================
+--> 8aa8729d8cfe
+STEP 35/90: COPY fix_dispatcher_flag_v115.sh /workspace/dgx-vllm-build/fix_dispatcher_flag_v115.sh
+--> ae8365452251
+STEP 36/90: RUN chmod +x /workspace/dgx-vllm-build/fix_dispatcher_flag_v115.sh &&     /workspace/dgx-vllm-build/fix_dispatcher_flag_v115.sh
+════════════════════════════════════════════════════════════
+v115: FIX DISPATCHER FLAG - THE FINAL PIECE!
+════════════════════════════════════════════════════════════
+
+ROOT CAUSE (discovered in v114):
+  scaled_mm_entry.cu compiled WITHOUT -DENABLE_SCALED_MM_SM120=1
+  SM_120 kernels compiled WITH the flag
+  Result: Kernels exist, but #ifdef fails in dispatcher!
+
+SOLUTION:
+  Ensure scaled_mm_entry.cu gets compiled with the flag
+  by explicitly setting compile definitions for this file
+
+════════════════════════════════════════════════════════════
+
+✓ Backup created
+Added dispatcher fix after endif() at line 915
+
+What this does:
+  1. After SM_120 section completes
+  2. Explicitly set ENABLE_SCALED_MM_SM120=1 for scaled_mm_entry.cu
+  3. Ensures #ifdef block in dispatcher evaluates to TRUE
+
+Expected result:
+  Dispatcher compiled WITH flag → #ifdef passes → routes 121 to SM_120!
+
+════════════════════════════════════════════════════════════
+--> 7c6ff72e3ef5
+STEP 37/90: COPY grouped_mm_gb10_native_v109.cu /workspace/dgx-vllm-build/grouped_mm_gb10_native_v109.cu
+--> 61a64415de0e
+STEP 38/90: COPY integrate_gb10_native_v109.sh .
+--> 0196b63399a5
+STEP 39/90: RUN chmod +x integrate_gb10_native_v109.sh && ./integrate_gb10_native_v109.sh
+============================================================================
+GB10 NATIVE MOE KERNEL v109 - LEVERAGE GeForce Blackwell!
+============================================================================
+
+Based on NVIDIA official example: 79d_blackwell_geforce_nvfp4_grouped_gemm.cu
+
+Key Optimizations:
+  • Sm120 ArchTag (GeForce Blackwell, NOT datacenter Sm100)
+  • Pingpong Schedule (NVIDIA's grouped GEMM optimization)
+  • 128×128×128 tiles (NVIDIA's recommended for GeForce)
+  • 1×1×1 cluster (GeForce constraint)
+  • Optimized for LPDDR5X unified memory (301 GB/s)
+
+This LEVERAGES GB10 hardware instead of SM100 fallback!
+
+[1/5] Detecting vLLM directory structure...
+Using direct csrc/ structure
+✓ MOE directory: csrc/quantization/w8a8/cutlass/moe
+[2/5] Copying GB10 native kernel v109...
+✓ Copied GB10 native kernel v109
+[3/5] Updating CMakeLists.txt...
+GB10 v109 block appended to CMakeLists.txt (fallback)
+Added GB10 v109 kernel to CMakeLists.txt
+[4/5] Updating dispatcher to prefer v109...
+Found dispatcher: csrc/quantization/w8a8/cutlass/moe/../scaled_mm_entry.cu
+✓ Dispatcher will prefer v109 native kernel
+  Fallback order: v109 → SM100 → SM90
+
+[5/5] Verifying Integration...
+============================================================================
+Checking kernel files...
+✓ GB10 v109 kernel
+Checking CMake configuration...
+CMakeLists.txt: GB10 v109 configured
+
+============================================================================
+✓ GB10 Native v109 Integration Complete!
+============================================================================
+
+Summary:
+  • Kernel: csrc/quantization/w8a8/cutlass/moe/grouped_mm_gb10_native_v109.cu
+  • Build flag: -DENABLE_CUTLASS_MOE_GB10_V109=1
+  • Optimizations:
+    - Sm120 ArchTag (GeForce Blackwell)
+    - Pingpong Schedule (NVIDIA official)
+    - 128×128×128 tiles (GeForce-optimized)
+    - LPDDR5X memory optimization
+
+This configuration LEVERAGES GB10 hardware!
+
+Next steps:
+  1. Build vLLM v109: cd /workspace/dgx-vllm-build && IMAGE_VERSION=109 ./build.sh
+  2. Compare v109 (native) vs v108 (SM100 fallback) performance
+  3. Expected: v109 should be FASTER than v108!
+
+Strategy:
+  v108 = SM100 fallback (WORKS, baseline performance)
+  v109 = GB10 native (LEVERAGES, optimized performance)
+
+--> 728739124f5e
+STEP 40/90: COPY cutlass_nvfp4 /workspace/dgx-vllm-build/cutlass_nvfp4
+--> 91fa6ab4db0d
+STEP 41/90: COPY integrate_cuda_fp4_extension.sh /workspace/dgx-vllm-build/integrate_cuda_fp4_extension.sh
+--> 48a799b06439
+STEP 42/90: RUN chmod +x /workspace/dgx-vllm-build/integrate_cuda_fp4_extension.sh &&     /workspace/dgx-vllm-build/integrate_cuda_fp4_extension.sh
+================================
+  CUDA FP4 Extension v1.0.0
+  Integration for GB10 (SM_121)
+================================
+
+[1/4] Installing CUDA FP4 headers...
+cp: cannot stat '/workspace/dgx-vllm-build/cutlass_nvfp4/nvfp4_gemm_kernel_optimized.cuh': No such file or directory
+Error: building at STEP "RUN chmod +x /workspace/dgx-vllm-build/integrate_cuda_fp4_extension.sh &&     /workspace/dgx-vllm-build/integrate_cuda_fp4_extension.sh": while running runtime: exit status 1
