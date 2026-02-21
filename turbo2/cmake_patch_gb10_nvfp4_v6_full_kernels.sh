@@ -66,10 +66,15 @@ if(${CMAKE_CUDA_COMPILER_VERSION} VERSION_GREATER_EQUAL 12.8)
   # Combine for setting properties
   set(GB10_NVFP4_ALL_FILES ${GB10_NVFP4_ENTRY_FILES} ${GB10_NVFP4_KERNEL_FILES})
 
-  # Set arch to sm_120 + sm_121 for all files (dual-arch)
+  # Set arch to sm_120f + sm_121f for all files (dual-arch)
+  # MUST use 'f' suffix to match vLLM CMake convention (CUDA >= 13.0).
+  # Without 'f': generates -gencode compute_120/sm_120 (non-family-specific)
+  # which conflicts with compute_120f/sm_120f from TORCH_CUDA_ARCH_LIST.
+  # nvcc fatal: "The same GPU code (sm_120) generated for non family-specific
+  # and family-specific GPU arch"
   set_gencode_flags_for_srcs(
     SRCS "${GB10_NVFP4_ALL_FILES}"
-    CUDA_ARCHS "12.0;12.1"
+    CUDA_ARCHS "12.0f;12.1f"
   )
 
   # Set compile definition on all files
