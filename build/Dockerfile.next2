@@ -2,10 +2,13 @@ ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.01-py3
 FROM ${BASE_IMAGE}
 
 # ============================================================
-# vllm-next2: vLLM latest + CUTLASS 4.3.5 + Branchless E2M1
+# vllm-next2: vLLM latest + CUTLASS 4.3.5 + FP8 MoE SM120 + MTP
 # Targets: SM120a (RTX PRO 6000) + SM121a (DGX Spark GB10)
-# EAGLE3 + MTP speculative decoding built-in
-# Branchless E2M1 NumericConverter for SM121 NVFP4 performance
+# Features over next:
+#   - FP8 CUTLASS MoE grouped GEMM for SM120 (replaces Triton fallback)
+#   - MTP speculative decoding with NVFP4 models (GLM-4.7, Step-3.5)
+#   - EAGLE3 speculative decoding (unchanged from next)
+#   - Marlin SM12x W4A8/W4A16 (unchanged from next)
 #
 # Build:
 #   DGX:      podman build -f Dockerfile.next2 -t vllm-next2 .
@@ -38,22 +41,7 @@ RUN git clone --depth 1 --branch v4.3.5 \
 ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
 
 # ============================================================
-# CUTLASS SM121 E2M1 Patches (next2: branchless software fallback)
-# ============================================================
-# SM121 lacks cvt.rn.satfinite.e2m1x2.f32 PTX instruction.
-# Patch 1: Remove SM121 from CUDA_PTX_FP4FP6_CVT_ENABLED guard
-#          so SM121 uses software E2M1 instead of failing at ptxas.
-# Patch 2: Replace generic exmy_base.h (~40 SASS) with branchless
-#          NumericConverter specialization (~14 SASS) for E2M1.
-# SM120 continues using hardware PTX (unaffected).
-# ============================================================
-COPY patch_cutlass_float_subbyte_sm121.py /tmp/
-RUN python3 /tmp/patch_cutlass_float_subbyte_sm121.py
-COPY patch_numeric_conversion_e2m1_branchless.py /tmp/
-RUN python3 /tmp/patch_numeric_conversion_e2m1_branchless.py
-
-# ============================================================
-# vLLM from source (pinned to known-good commit from vllm-next)
+# vLLM from source (pinned to known-good commit)
 # ============================================================
 RUN git clone --filter=blob:none \
       https://github.com/vllm-project/vllm.git /tmp/vllm-build && \
@@ -68,6 +56,15 @@ WORKDIR /tmp/vllm-build
 # ============================================================
 COPY marlin_sm12x.patch /tmp/
 RUN git apply /tmp/marlin_sm12x.patch || echo "Patch already applied or not needed"
+
+# ============================================================
+# FP8 CUTLASS MoE SM120 (next2: grouped GEMM for FP8 MoE)
+# Dense FP8 SM120 already exists in vLLM — only MoE was missing.
+# Adds: grouped_mm_c3x_sm120.cu + CMake + C++ dispatch + Python gate
+# ============================================================
+COPY grouped_mm_c3x_sm120.cu /tmp/vllm-build/csrc/quantization/w8a8/cutlass/moe/
+COPY patch_fp8_cutlass_sm120.py /tmp/
+RUN python3 /tmp/patch_fp8_cutlass_sm120.py
 
 # Existierendes PyTorch nutzen (NVIDIA's 2.10.0+cu131)
 RUN python use_existing_torch.py
@@ -121,6 +118,14 @@ RUN python3 /tmp/patch_transformers.py
 # ============================================================
 COPY patch_streaming.py /tmp/
 RUN python3 /tmp/patch_streaming.py
+
+# ============================================================
+# MTP NVFP4 Exclusion (next2: enables MTP with NVFP4 models)
+# Fixes mtp.fc/mtp.norm not being excluded from FP4 quantization.
+# Models with MTP: GLM-4.7-Flash (1 layer), Step-3.5-Flash (3 layers)
+# ============================================================
+COPY patch_mtp_nvfp4_exclusion.py /tmp/
+RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
 
 # cv2/typing shadowing fix
 RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
