@@ -1,13 +1,14 @@
 #!/bin/bash
-# Qwen3-Coder-Next INT4 AutoRound (W4A8-FP8) on DGX Spark
+# Qwen3-Coder-Next INT4 AutoRound (W4A8-FP8) + MTP on DGX Spark
 # Model: Intel/Qwen3-Coder-Next-int4-AutoRound
+# MTP: qwen3_next_mtp, NST=2 (framework-internal, keine Extra-Weights)
 #
 # Download:
 #   hf download Intel/Qwen3-Coder-Next-int4-AutoRound \
 #     --local-dir /data/tensordata/Qwen3-Coder-Next-int4-AutoRound
 
 MODEL_PATH="/data/tensordata/Qwen3-Coder-Next-int4-AutoRound"
-NAME="vllm-qwen3-coder-next-int4"
+NAME="vllm-qwen3-coder-next-int4-mtp"
 
 podman stop $NAME 2>/dev/null; podman rm $NAME 2>/dev/null
 
@@ -33,8 +34,11 @@ podman run -d \
     --max-num-batched-tokens 4096 \
     --quantization auto_round \
     --dtype bfloat16 \
-    --enable-prefix-caching \
+    --no-enable-chunked-prefill \
+    --speculative-config '{"method": "qwen3_next_mtp", "num_speculative_tokens": 2}' \
     --served-model-name qwen3-coder-next \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder
-#   --speculative-config '{"method": "mtp", "num_speculative_tokens": 2}'
+
+echo "Container $NAME gestartet"
+echo "Logs: podman logs -f $NAME"
