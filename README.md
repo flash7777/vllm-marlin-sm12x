@@ -2,6 +2,10 @@
 
 Patches for [vllm-project/vllm](https://github.com/vllm-project/vllm) enabling Marlin W4A8-FP8 on SM121 (DGX Spark GB10) + TMA load module for SM120/SM121.
 
+USE READY-TO-USE  build-scripts in:
+  - ./build/  vllm-next
+  - ./whpthomas/   qwen3 coder next int4 autoround
+
 ## Base
 
 - **Upstream**: `vllm-project/vllm` @ `fd267bc7b7cd3d001ac5a893eacb9e56ff256822`
