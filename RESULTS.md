@@ -146,6 +146,11 @@ Gleiche Config: INT4 W4A16 + EAGLE3 NST=3. Nächstliegende Output-Längen vergli
 - **303.1 tok/s** (long) — neuer Bestwert für Qwen3-Coder auf RTX PRO 6000
 - +43% vs INT4 Vanilla (211.7), +65% vs NVFP4+EAGLE3 (183.4)
 
+### VLLM_MARLIN_USE_ATOMIC_ADD=1 = kein Effekt bei Single-GPU
+
+Getestet auf DGX Spark (GB10, Single-GPU) mit GLM-4.7-Flash INT4 und Qwen3-Coder-30B INT4.
+Kein messbarer Unterschied bei Batch=1. ATOMIC_ADD bringt erst bei Multi-GPU/Multi-Batch Vorteile.
+
 ### W4A8 = kein Speedup bei Batch=1
 
 W4A8 (FP8 MMA k=32) bringt keinen Speedup vs W4A16 (FP16 MMA k=16) bei Batch=1.
@@ -171,3 +176,4 @@ W4A8 bringt erst bei hohem Batch-Size Compute-Speedup (2× via FP8 k=32).
 | `VLLM_MARLIN_INPUT_DTYPE` | `fp8` | Aktiviert W4A8 (INT4→FP8 Dequant + FP8 MMA k=32) |
 | `VLLM_MLA_DISABLE` | `1` | MLA deaktivieren (Qwen3/GLM MoE) |
 | `FLASHINFER_DISABLE_VERSION_CHECK` | `1` | FlashInfer Version-Mismatch umgehen |
+| `VLLM_MARLIN_USE_ATOMIC_ADD` | `1` | Atomic Add fuer Marlin (kein Effekt bei Single-GPU Batch=1) |

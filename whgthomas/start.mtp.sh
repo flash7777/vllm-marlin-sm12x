@@ -29,13 +29,14 @@ podman run -d \
     --host 0.0.0.0 \
     --port 8000 \
     --max-model-len 131072 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.05 \
+    --kv-cache-memory-bytes 30G \
     --max-num-seqs 32 \
-    --max-num-batched-tokens 4096 \
+    --max-num-batched-tokens 131072 \
     --quantization auto_round \
     --dtype bfloat16 \
     --no-enable-chunked-prefill \
-    --speculative-config '{"method": "qwen3_next_mtp", "num_speculative_tokens": 2}' \
+    --speculative-config '{"method": "qwen3_next_mtp", "num_speculative_tokens": 1}' \
     --served-model-name qwen3-coder-next \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder

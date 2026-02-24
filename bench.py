@@ -47,7 +47,11 @@ def chat(url, model, prompt, max_tokens=200, temperature=0):
     with urllib.request.urlopen(req, timeout=120) as resp:
         body = json.loads(resp.read())
     elapsed = time.time() - t0
-    content = body["choices"][0]["message"]["content"]
+    msg = body["choices"][0]["message"]
+    content = msg["content"]
+    # Reasoning-Parser: content kann None sein wenn alle Tokens fuers Denken draufgehen
+    if content is None:
+        content = msg.get("reasoning") or ""
     tokens = body["usage"]["completion_tokens"]
     return content, tokens, elapsed
 
@@ -151,21 +155,13 @@ def math_test(url, model, n=50):
         expected = eval(f"{a}{op}{b}")
         prompt = f"Berechne: {a} {op} {b} = ? Antworte NUR mit der Zahl, nichts anderes."
 
-        content, _, _ = chat(url, model, prompt, max_tokens=30, temperature=0)
-        # Extract number from response
-        nums = []
-        for word in content.replace(",", "").replace(".", "").split():
-            try:
-                nums.append(int(word))
-            except ValueError:
-                pass
-        # Also try the whole content stripped
-        try:
-            nums.append(int(content.strip()))
-        except ValueError:
-            pass
+        content, _, _ = chat(url, model, prompt, max_tokens=500, temperature=0)
+        import re as _re
+        nums = [int(x) for x in _re.findall(r'-?\d+', content)]
+        operands = {a, b}
+        filtered = [n for n in nums if n not in operands]
 
-        got_it = expected in nums
+        got_it = expected in nums or expected in filtered
         if got_it:
             correct += 1
         else:

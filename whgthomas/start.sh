@@ -28,7 +28,8 @@ podman run -d \
     --host 0.0.0.0 \
     --port 8000 \
     --max-model-len 131072 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.05 \
+    --kv-cache-memory-bytes 30G \
     --max-num-seqs 32 \
     --max-num-batched-tokens 4096 \
     --quantization auto_round \
