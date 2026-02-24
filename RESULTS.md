@@ -66,11 +66,14 @@ NCCL Transport: `NET/IB : Using [0]rocep1s0f0:1/RoCE` (~5-10μs Latenz vs ~200-5
 
 ### Context-Matrix: MiniMax-M2.5 TP=2 RoCE (tok/s)
 
-| | ctx=0 | ctx=512 | ctx=2K | ctx=8K | ctx=16K |
-|------|---:|---:|---:|---:|---:|
-| short | 39.2 | 38.0 | 36.2 | 30.3 | 25.2 |
-| medium | 41.7 | 40.2 | 38.5 | 32.3 | 26.2 |
-| long | 41.7 | 40.2 | 38.5 | 32.3 | 26.2 |
+Image: `vllm-next2` (vLLM 0.15.2rc1.dev117), `--reasoning-parser minimax_m2`, KV-Cache 30G.
+Math: 50/50 (100%) bei max_tokens=500.
+
+| | ctx=0 | ctx=1K | ctx=4K | ctx=8K | ctx=16K | ctx=32K |
+|------|---:|---:|---:|---:|---:|---:|
+| short (20) | 37.1 | 33.6 | 31.3 | 29.7 | 25.6 | 20.1 |
+| medium (150) | 40.7 | 39.8 | 36.9 | 34.6 | 29.9 | 23.6 |
+| long (400) | 40.7 | 40.1 | 37.5 | 34.9 | 30.1 | 24.0 |
 
 ### RoCE Container-Flags
 
