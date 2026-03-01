@@ -37,11 +37,13 @@ podman run -d \
   vllm serve "$MODEL" \
     --host 0.0.0.0 \
     --port 8000 \
-    --served-model-name qwen3-coder-int4 \
+    --served-model-name local \
     $GPU_MEM \
     --max-model-len 32768 \
     --trust-remote-code \
     --quantization auto_round \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
     --speculative-config='{"model":"'"$DRAFTER"'","num_speculative_tokens":'"$NST"',"method":"eagle3"}'
 
 echo "Container $NAME started on port 8011 (Qwen3-Coder W4A16 + EAGLE3 NST=$NST)"

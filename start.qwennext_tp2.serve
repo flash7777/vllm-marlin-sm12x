@@ -1,0 +1,51 @@
+#!/bin/bash
+# TP=2 Qwen3-Coder-Next INT4 AutoRound: torchrun serve (DGX + PGX)
+
+set -euo pipefail
+
+HEAD_CONTAINER="qwennext-tp2-head"
+WORKER_CONTAINER="qwennext-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+MODEL_PATH="/data/tensordata/Qwen3-Coder-Next-int4-AutoRound"
+MODEL_NAME="qwen3-coder-next"
+PORT=8011
+MAX_MODEL_LEN=16384
+
+echo "=== torchrun TP=2 serve: Qwen3-Coder-Next INT4 ==="
+echo "Modell: $MODEL_PATH"
+echo "Port:   $PORT"
+echo ""
+
+# PGX (Rank 1)
+echo "Starte Rank 1 (PGX)..."
+ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code"
+
+sleep 2
+
+# DGX (Rank 0)
+echo "Starte Rank 0 (DGX)..."
+podman exec "$HEAD_CONTAINER" \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
+    /opt/vllm/serve_torchrun.py \
+      --model "$MODEL_PATH" \
+      --served-model-name "$MODEL_NAME" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code \
+  2>&1 | tee /tmp/qwennext-tp2-serve.log

@@ -1,0 +1,25 @@
+#!/bin/bash
+# DGX Spark | vLLM-next2 | Qwen3-Coder FP8 online | Vanilla
+# Image: localhost/vllm-next2
+# NEW: CUTLASS MoE SM120 (replaces Triton fallback)
+# Baseline: 50.5 tok/s (vllm-next, Triton MoE)
+podman run -d \
+  --replace \
+  --name vllm-next2-fp8 \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  --network host \
+  -v /data/tensordata:/data/tensordata \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  localhost/vllm-next2 \
+  vllm serve /data/tensordata/Qwen3-Coder-30B-A3B-Instruct \
+    --host 0.0.0.0 \
+    --port 8011 \
+    --served-model-name qwen3-coder-fp8 \
+    --quantization fp8 \
+    --gpu-memory-utilization 0.33 \
+    --kv-cache-memory-bytes 10G \
+    --kv-cache-dtype fp8 \
+    --max-model-len 32768 \
+    --trust-remote-code
