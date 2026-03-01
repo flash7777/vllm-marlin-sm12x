@@ -199,33 +199,25 @@ def create_app(args) -> FastAPI:
 
 def _tokenize_chat(llm, messages):
     """Apply chat template and return token IDs."""
-    from vllm.entrypoints.llm import conversation_to_seq
-
-    conversations = conversation_to_seq(messages)
-    engine_prompts = llm._preprocess_chat(
-        conversations,
-        add_generation_prompt=True,
+    # llm.llm_engine.tokenizer is a CachedTokenizer (HF PreTrainedTokenizer)
+    # It has apply_chat_template directly — do NOT unwrap to ._tokenizer
+    tokenizer = llm.llm_engine.tokenizer
+    result = tokenizer.apply_chat_template(
+        messages, tokenize=True, add_generation_prompt=True,
     )
-    prompt = engine_prompts[0]
-
-    if "prompt_token_ids" in prompt:
-        return list(prompt["prompt_token_ids"])
-
-    # Fallback: tokenize text
-    tokenizer = llm.llm_engine.tokenizer.tokenizer
-    return tokenizer.encode(prompt.get("prompt", ""))
+    # BatchEncoding (transformers 5.x): isinstance(x, dict) is False!
+    if hasattr(result, 'input_ids'):
+        return list(result.input_ids)
+    if isinstance(result, list):
+        return result
+    return list(result)
 
 
 def _add_to_engine(llm, req_id, token_ids, sampling_dict):
     """Add a pre-tokenized request to the engine."""
     params = SamplingParams(**sampling_dict)
     params.output_kind = RequestOutputKind.FINAL_ONLY
-
-    tok_prompt = {"prompt_token_ids": token_ids}
-    engine_request = llm.input_processor.process_inputs(
-        req_id, tok_prompt, params,
-    )
-    llm.llm_engine.add_request(req_id, engine_request, params)
+    llm.llm_engine.add_request(req_id, {"prompt_token_ids": token_ids}, params)
 
 
 def run_rank0(llm: LLM, gloo_group, args):
@@ -375,8 +367,9 @@ def run_worker(llm: LLM, gloo_group, rank: int):
             except Exception as e:
                 print(f"[Rank {rank}] add_request error: {e}", file=sys.stderr)
 
-        # Step engine (NCCL sync inside — matches rank 0's step())
-        if engine.has_unfinished_requests():
+        # Always step when rank 0 steps (NCCL sync inside)
+        # Use has_unfinished_requests OR new_requests to decide
+        if engine.has_unfinished_requests() or msg.get("new_requests"):
             try:
                 engine.step()
             except Exception as e:

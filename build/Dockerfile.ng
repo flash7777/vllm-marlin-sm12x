@@ -113,9 +113,10 @@ COPY patch_mtp_nvfp4_exclusion.py /tmp/
 RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
 
 # ============================================================
-# UF17: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
+# UF17v2: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
+# Uses in-place all_reduce_with_output (mutates_args=["output"])
+# for deterministic buffer addresses in piecewise CUDA graphs.
 # Activated at runtime via VLLM_UF_EAGER_ALLREDUCE=1
-# Result: 107.8 -> 196 tok/s (+82%) on GB10 TP=2 RoCE
 # ============================================================
 COPY patch_uf17_eager_allreduce.py /tmp/
 RUN python3 /tmp/patch_uf17_eager_allreduce.py
