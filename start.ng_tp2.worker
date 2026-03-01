@@ -1,0 +1,57 @@
+#!/bin/bash
+# TP=2 vllm-ng: WORKER Container (PGX ThinkStation)
+# Shared container for all TP=2 torchrun serve configs.
+
+set -euo pipefail
+
+CONTAINER_NAME="ng-tp2-worker"
+IMAGE="localhost/vllm-ng"
+CX7_IF="enp1s0f0np0"
+NVML_LIB="/usr/lib/aarch64-linux-gnu/libnvidia-ml.so.590.48.01"
+NVML_DEST="/usr/lib/aarch64-linux-gnu"
+
+echo "=== vllm-ng WORKER Container (PGX ThinkStation) ==="
+
+ssh flash@192.168.1.116 "podman stop $CONTAINER_NAME 2>/dev/null || true; podman rm $CONTAINER_NAME 2>/dev/null || true; podman system migrate 2>/dev/null || true"
+
+ssh flash@192.168.1.116 "nohup podman run \
+  --name $CONTAINER_NAME \
+  --network host \
+  --ipc=host \
+  --device /dev/nvidia0 \
+  --device /dev/nvidiactl \
+  --device /dev/nvidia-uvm \
+  --device /dev/nvidia-uvm-tools \
+  --device /dev/dri/card0 \
+  --device /dev/dri/renderD128 \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --security-opt=label=disable \
+  -v /data/tensordata:/data/tensordata \
+  -v \$HOME/.cache/huggingface:/root/.cache/huggingface \
+  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so.590.48.01:ro \
+  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so.1:ro \
+  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so:ro \
+  -e NCCL_SOCKET_IFNAME=$CX7_IF \
+  -e GLOO_SOCKET_IFNAME=$CX7_IF \
+  -e TP_SOCKET_IFNAME=$CX7_IF \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_DEBUG=WARN \
+  -e VLLM_MLA_DISABLE=1 \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  -e VLLM_ENABLE_V1_MULTIPROCESSING=0 \
+  -e VLLM_UF_EAGER_ALLREDUCE=1 \
+  $IMAGE \
+  sleep infinity > /tmp/$CONTAINER_NAME.log 2>&1 &"
+
+sleep 5
+
+if ssh flash@192.168.1.116 "podman ps | grep -q $CONTAINER_NAME"; then
+  echo "Container '$CONTAINER_NAME' laeuft auf PGX (UF17 EAGER_ALLREDUCE=1)."
+  echo "Naechster Schritt: ./start.ng_tp2.serve.<config>"
+else
+  echo "FEHLER: Container nicht gestartet!"
+  ssh flash@192.168.1.116 "tail -10 /tmp/$CONTAINER_NAME.log"
+  exit 1
+fi

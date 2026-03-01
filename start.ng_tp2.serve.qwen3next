@@ -1,0 +1,54 @@
+#!/bin/bash
+# TP=2 vllm-ng: Qwen3-Coder-Next INT4 AutoRound (vanilla, kein Speculative)
+# Qwen3-Next hat 512 Experts, 10 top-k, hybrid linear/full attention.
+# Kein MTP/EAGLE3 Drafter vorhanden fuer dieses Modell.
+# Voraussetzung: ng-tp2-head + ng-tp2-worker Container laufen
+
+set -euo pipefail
+
+HEAD_CONTAINER="ng-tp2-head"
+WORKER_CONTAINER="ng-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+MODEL_PATH="/data/tensordata/Qwen3-Coder-Next-int4-AutoRound"
+MODEL_NAME="qwen3-coder-next"
+PORT=8011
+MAX_MODEL_LEN=16384
+
+echo "=== vllm-ng TP=2 + UF17: Qwen3-Coder-Next INT4 (vanilla) ==="
+echo "Modell:  $MODEL_PATH"
+echo "Arch:    Qwen3NextForCausalLM (512E, top-10, hybrid attention)"
+echo ""
+
+# PGX (Rank 1)
+ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code"
+
+sleep 2
+
+# DGX (Rank 0)
+podman exec "$HEAD_CONTAINER" \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
+    /opt/vllm/serve_torchrun.py \
+      --model "$MODEL_PATH" \
+      --served-model-name "$MODEL_NAME" \
+      --port "$PORT" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code \
+  2>&1 | tee /tmp/ng-qwen3next.log

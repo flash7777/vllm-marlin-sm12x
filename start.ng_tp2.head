@@ -1,0 +1,49 @@
+#!/bin/bash
+# TP=2 vllm-ng: HEAD Container (DGX Spark)
+# Shared container for all TP=2 torchrun serve configs.
+#
+# Reihenfolge:
+#   1. DGX:  ./start.ng_tp2.head
+#   2. DGX:  ./start.ng_tp2.worker       (startet PGX remote)
+#   3. DGX:  ./start.ng_tp2.serve.<config>
+
+set -euo pipefail
+
+CONTAINER_NAME="ng-tp2-head"
+IMAGE="localhost/vllm-ng"
+CX7_IF="enp1s0f0np0"
+
+echo "=== vllm-ng HEAD Container (DGX Spark) ==="
+echo "Container: $CONTAINER_NAME"
+echo "Image:     $IMAGE"
+echo ""
+
+podman stop "$CONTAINER_NAME" 2>/dev/null || true
+podman rm "$CONTAINER_NAME" 2>/dev/null || true
+
+podman run -d \
+  --name "$CONTAINER_NAME" \
+  --network host \
+  --ipc=host \
+  --device nvidia.com/gpu=all \
+  --device /dev/infiniband/uverbs0 \
+  --device /dev/infiniband/rdma_cm \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
+  -v /data/tensordata:/data/tensordata \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  -e NCCL_SOCKET_IFNAME="$CX7_IF" \
+  -e GLOO_SOCKET_IFNAME="$CX7_IF" \
+  -e TP_SOCKET_IFNAME="$CX7_IF" \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IB_HCA=rocep1s0f0 \
+  -e NCCL_DEBUG=WARN \
+  -e VLLM_MLA_DISABLE=1 \
+  -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
+  -e VLLM_ENABLE_V1_MULTIPROCESSING=0 \
+  -e VLLM_UF_EAGER_ALLREDUCE=1 \
+  "$IMAGE" \
+  sleep infinity
+
+echo "Container '$CONTAINER_NAME' gestartet (UF17 EAGER_ALLREDUCE=1)."
+echo "Naechster Schritt: ./start.ng_tp2.worker"
