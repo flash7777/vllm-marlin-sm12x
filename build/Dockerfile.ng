@@ -113,9 +113,9 @@ COPY patch_mtp_nvfp4_exclusion.py /tmp/
 RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
 
 # ============================================================
-# UF17v2: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
-# Uses in-place all_reduce_with_output (mutates_args=["output"])
-# for deterministic buffer addresses in piecewise CUDA graphs.
+# UF17v3: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
+# Uses all_reduce_with_output (mutates_args=["output"]) with
+# zero-copy NCCL sendbuf/recvbuf — no temp alloc, no copy_.
 # Activated at runtime via VLLM_UF_EAGER_ALLREDUCE=1
 # ============================================================
 COPY patch_uf17_eager_allreduce.py /tmp/
