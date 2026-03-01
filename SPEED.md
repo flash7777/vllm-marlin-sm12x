@@ -40,7 +40,41 @@ Eager AllReduce (UF17):     19 µs/Call × 97 = 1.8 ms/Token
 Anteil an Token-Zeit:       1.8 / 8.6 = 21%
 ```
 
-TP=2 lohnt sich trotzdem: 2× Bandbreite spart 2.9 ms, AllReduce kostet nur 1.8 ms.
+TP=2 lohnt sich trotzdem: 2× Bandbreite spart ~5.4 ms, AllReduce kostet nur 1.8 ms.
+
+### AllReduce ist NICHT overlapped — es sind echte Wait-Cycles
+
+UF17 macht AllReduce zum splitting op. Der CUDA Graph wird an jeder AllReduce-Stelle
+aufgebrochen. Die Ausfuehrung ist strikt sequentiell:
+
+```
+[Graph Segment 1] → STOP → [AllReduce 19µs] → STOP → [Graph Segment 2] → ...
+                     ^^^^                       ^^^^
+                  Tensor Cores idle           Tensor Cores idle
+```
+
+AllReduce laeuft als eigenstaendiger NCCL-Kernel. Das naechste Graph-Segment kann
+erst starten wenn AllReduce fertig ist, weil es das Ergebnis als Input braucht.
+Die 1.8 ms sind **echte Wartezeit** in der die Tensor Cores nichts tun.
+
+```
+Aktuell (UF17, sequentiell):
+  Compute: 6.8 ms  +  AllReduce: 1.8 ms  =  8.6 ms  → 116 tok/s
+
+Theoretisch (AllReduce overlapped mit Compute):
+  Compute: 6.8 ms  (AllReduce versteckt)  =  6.8 ms  → 147 tok/s  (+27%)
+```
+
+Overlap waere der groesste verbleibende Hebel (+27%), ist aber mit CUDA Graphs
+nicht machbar. Das fundamentale Dilemma:
+
+| Modus | Overlap | Launch-Overhead | Ergebnis |
+|-------|---------|-----------------|----------|
+| CUDA Graphs + UF17 (splitting) | Kein Overlap | Minimal (~2.5µs Replay) | **116 tok/s** (aktuell) |
+| CUDA Graphs ohne UF17 (in-graph) | Kein Overlap | Keiner, aber NCCL 43× langsamer | ~62 tok/s |
+| Ohne CUDA Graphs (enforce-eager) | Overlap moeglich | Hoch (~10-20µs pro Kernel) | <50 tok/s |
+
+Alle drei Varianten haben Nachteile. UF17 (splitting) ist der beste Kompromiss.
 
 ## Warum TP=1 langsamer ist
 
