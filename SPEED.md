@@ -94,6 +94,59 @@ aggregierte Bandbreite, und die AllReduce-Kosten sind kleiner als der Gewinn.
 | TP=2 Baseline (kein UF17) | — | — | 107.8 | 76% |
 | TP=1 EAGLE3 NST=1 | 14.8 | 69.1 | 93.0 | 78% |
 
+## Warum AllReduce nicht schneller als 19 µs geht
+
+Die 19 µs pro AllReduce bestehen fast vollstaendig aus NCCL-Protokoll-Overhead.
+Die eigentliche Datenuebertragung ist vernachlaessigbar:
+
+```
+4 KiB bei 25 GB/s (RoCE 200 Gbps):   0.16 µs  (<1% der Latenz)
+NCCL Protokoll-Overhead:              ~15 µs   (GPU-seitiger Kernel-Code)
+GPU Reduce (Addition):                 ~1 µs
+Sonstiges:                             ~3 µs
+                                      ------
+                                       ~19 µs
+```
+
+Das sieht man an der flachen Skalierung ueber Datengroessen:
+
+```
+ 4 KiB:   19 µs
+ 8 KiB:   20 µs   (+1 µs fuer doppelte Daten)
+16 KiB:   21 µs   (+2 µs fuer 4× Daten)
+32 KiB:   28 µs   (+9 µs fuer 8× Daten)
+```
+
+### Getestete Optimierungen (alle neutral)
+
+| Variable | Idee | Ergebnis |
+|----------|------|----------|
+| `NCCL_MAX_NCHANNELS=1` | Weniger Channel-Overhead | Neutral (UF13) |
+| `NCCL_PROTO=LL` | Force Low-Latency Protokoll | Neutral (ist default bei 4 KiB) |
+| `NCCL_ALGO=Ring` | Ring vs Tree | Neutral (identisch bei TP=2) |
+| GPU Stream Priority | High-Priority fuer NCCL | Irrelevant (NCCL laeuft allein) |
+| CPU Realtime-Prio | `chrt -f 99` fuer NCCL Proxy | Irrelevant (Overhead ist GPU-seitig) |
+| Kompression | 4 KiB verkleinern | Sinnlos (Daten = 0.16µs, Overhead = 15µs) |
+| Pipelined AllReduce | Teilergebnisse frueher senden | Sinnlos (4 KiB zu klein zum Chunken) |
+
+### Was theoretisch helfen wuerde
+
+Raw RDMA ohne NCCL — eigener GPU-Kernel der direkt ueber ibverbs sendet:
+
+```
+Hand-geschriebener TP=2 Reduce:
+  RDMA Write (bidirektional):   ~2 µs
+  Flag-Wait:                    ~2 µs
+  GPU Add:                      ~1 µs
+                                -----
+                                ~5 µs  (statt 19 µs)
+
+Ersparnis: 14 µs × 97 = 1.36 ms/Token → ~130 tok/s (+12%)
+```
+
+Aber: Monate Aufwand, fragil, bricht bei jedem NCCL/Driver-Update.
+19 µs ist NCCL's architektureller Floor fuer cross-node Collectives.
+
 ## Naechste Hebel (theoretisch)
 
 | Hebel | Erwartung | Machbarkeit |
