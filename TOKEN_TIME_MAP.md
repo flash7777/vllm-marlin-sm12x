@@ -35,15 +35,33 @@ Quelle: bench.py (long, 400 Tokens, seed=42, n=5), 2026-03-02
 
 | # | Phase | pro Aufruf | × Aufrufe | Gesamt | % | Typ | Quelle |
 |---|-------|-----------|-----------|--------|---|-----|--------|
-| 1 | **AllReduce (NCCL eager)** | 19.4 µs | 97 | **1.88 ms** | **22.2%** | [M] | nsys NVTX median, bestaetigt CUDA Events |
-| 2 | **MoE GEMMs (Marlin)** | — | 96 | **2.55 ms** | **30.1%** | [M/nsys] | marlin_moe_wna16, 3 Varianten |
-| 3 | **Attention (FlashAttn)** | ~25 µs | 48+2 | **1.32 ms** | **15.6%** | [M/nsys] | flash_fwd_splitkv_kernel |
-| 4 | **Non-MoE GEMMs (Marlin)** | — | ~150 | **1.44 ms** | **17.0%** | [M/nsys] | QKV, O-Proj, EAGLE Proj |
-| 5 | **MoE Routing** | ~6 µs | 48 | **0.28 ms** | **3.3%** | [M/nsys] | topkGating + align + sort |
-| 6 | **RMSNorm + Aktivierungen** | ~3 µs | 96+48 | **0.31 ms** | **3.7%** | [M/nsys] | reduce_kernel + triton_fused + SiLU |
-| 7 | **KV-Cache Write** | ~2 µs | 48 | **0.08 ms** | **0.9%** | [M/nsys] | reshape_and_cache_flash_kernel |
-| 8 | **CPU Scheduling + Launch** | — | — | **~0.50 ms** | **~5.9%** | [E] | vLLM Scheduler + CUDA Graph Replay |
-| 9 | **Sonstiges** | — | — | **~0.11 ms** | **~1.3%** | [E] | Embedding, LM-Head, Sampling, Residuals |
+| 1 | **AllReduce (NCCL eager)** | 19.4 µs | 97 | **1.88 ms** | **22.2%** | [M] | nsys NVTX median |
+| 1a | ↳ NCCL Protokoll-Overhead | ~15 µs | 97 | 1.46 ms | 17.2% | [E] | GPU-Kernel Setup+Sync |
+| 1b | ↳ GPU Reduce (Addition) | ~1 µs | 97 | 0.10 ms | 1.2% | [E] | 4 KiB elementweise Add |
+| 1c | ↳ RoCE Datentransfer | ~0.2 µs | 97 | 0.02 ms | 0.2% | [M] | 4 KiB @ 25 GB/s |
+| 1d | ↳ Sonstiges (Launch etc.) | ~3 µs | 97 | 0.30 ms | 3.5% | [E] | Kernel-Dispatch |
+| 2 | **MoE GEMMs (Marlin)** | — | 96 | **2.55 ms** | **30.1%** | [M/nsys] | marlin_moe_wna16 |
+| 2a | ↳ Gate+Up GEMM (8 Exp) | 39.1 µs | 48 | 1.88 ms | 22.2% | [M/nsys] | 8×2048×1536 INT4, med |
+| 2b | ↳ Down GEMM (8 Exp) | 59.1 µs | 48 | 2.84 ms | — | [M/nsys] | 8×768×2048 INT4, med |
+| 2* | ↳ *nsys-proportional* | — | 96 | *2.55 ms* | — | | *Budget-Zuordnung* |
+| 3 | **Attention (FlashAttn)** | 25 µs | 48+2 | **1.32 ms** | **15.6%** | [M/nsys] | flash_fwd_splitkv |
+| 3a | ↳ pro Layer (Target) | ~25 µs | 48 | 1.20 ms | 14.2% | [M/nsys] | Ctx≈0, med 52.8µs/2tok |
+| 3b | ↳ EAGLE3 Attention | ~25 µs | 2 | 0.05 ms | 0.6% | [M/nsys] | Draft verify |
+| 4 | **Non-MoE GEMMs (Marlin)** | — | ~150 | **1.44 ms** | **17.0%** | [M/nsys] | Attn-Proj + EAGLE |
+| 4a | ↳ QKV-Projektion | 17.8 µs | 48 | 0.85 ms | 10.1% | [M/nsys] | marlin v1, med |
+| 4b | ↳ O-Projektion | 10.0 µs | 48 | 0.48 ms | 5.7% | [M/nsys] | marlin v3, med |
+| 4c | ↳ EAGLE3 Projektionen | ~13 µs | ~6 | 0.08 ms | 0.9% | [M/nsys] | marlin v4+v5 |
+| 5 | **MoE Routing** | — | 48 | **0.28 ms** | **3.3%** | [M/nsys] | |
+| 5a | ↳ topkGating | 3.4 µs | 48 | 0.16 ms | 1.9% | [M/nsys] | Top-8 aus 128 Experts |
+| 5b | ↳ align_block_size | 3.1 µs | 48 | 0.15 ms | 1.8% | [M/nsys] | Token-Alignment |
+| 5c | ↳ count_and_sort | 1.2 µs | 48 | 0.06 ms | 0.7% | [M/nsys] | Expert-Token-Zuordnung |
+| 6 | **RMSNorm + Aktivierungen** | — | 96+48 | **0.31 ms** | **3.7%** | [M/nsys] | |
+| 6a | ↳ RMSNorm (Triton fused) | 2.7 µs | 96 | 0.26 ms | 3.1% | [M/nsys] | 2 pro Layer, med |
+| 6b | ↳ SiLU (act_and_mul) | 4.8 µs | 48 | 0.23 ms | 2.7% | [M/nsys] | 1 pro Layer, med |
+| 6* | ↳ *nsys-proportional* | — | — | *0.31 ms* | — | | *Budget-Zuordnung* |
+| 7 | **KV-Cache Write** | 2.5 µs | 48 | **0.12 ms** | **1.4%** | [M/nsys] | reshape_and_cache |
+| 8 | **CPU Scheduling + Launch** | — | — | **~0.46 ms** | **~5.4%** | [E] | vLLM Scheduler + Graph |
+| 9 | **Sonstiges** | — | — | **~0.11 ms** | **~1.3%** | [E] | Embedding, LM-Head, Sampling |
 | | **Summe** | | | **8.47 ms** | **100%** | [M] | bench.py |
 
 ### Methodik der nsys-Werte
