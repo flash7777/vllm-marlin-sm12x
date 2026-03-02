@@ -129,28 +129,77 @@ Das sieht man an der flachen Skalierung ueber Datengroessen:
 | Kompression | 4 KiB verkleinern | Sinnlos (Daten = 0.16µs, Overhead = 15µs) |
 | Pipelined AllReduce | Teilergebnisse frueher senden | Sinnlos (4 KiB zu klein zum Chunken) |
 
-### Was theoretisch helfen wuerde
+### UF19: Raw RDMA ohne NCCL — GEMESSEN
 
-Raw RDMA ohne NCCL — eigener GPU-Kernel der direkt ueber ibverbs sendet:
+Prototyp implementiert und getestet (C/CUDA + ibverbs, `/tmp/uf19/uf19_bench.cu`).
+Mapped pinned Memory (cudaHostAllocMapped) fuer GPU↔NIC Zero-Copy.
 
 ```
-Hand-geschriebener TP=2 Reduce:
-  RDMA Write (bidirektional):   ~2 µs
-  Flag-Wait:                    ~2 µs
-  GPU Add:                      ~1 µs
-                                -----
-                                ~5 µs  (statt 19 µs)
-
-Ersparnis: 14 µs × 97 = 1.36 ms/Token → ~130 tok/s (+12%)
+Raw RDMA Write Latenz (ib_write_lat, CPU Memory):
+   2 B:   1.74 µs   (Basislatenz)
+   4 KiB: 3.19 µs   (unsere AllReduce-Groesse)
+   8 KiB: 3.78 µs
+  32 KiB: 6.69 µs
 ```
 
-Aber: Monate Aufwand, fragil, bricht bei jedem NCCL/Driver-Update.
-19 µs ist NCCL's architektureller Floor fuer cross-node Collectives.
+```
+UF19 Custom AllReduce (gemessen, 5000 iters):
+  GPU→mapped + fence:      5.1 µs   (GPU schreibt Partial Sum in mapped Memory)
+  CPU RDMA post:           0.3 µs   (ibv_post_send, 2 chained WRs)
+  GPU poll+add:            6.7 µs   (wartet auf RDMA-Daten, addiert)
+                           -----
+                           12.1 µs  (vs 19.0 µs NCCL)
 
-## Naechste Hebel (theoretisch)
+Ersparnis: 6.9 µs × 97 = 670 µs/Token → 126.1 tok/s (+8.4%)
+```
+
+Engpass: __threadfence_system() + CPU-Flag-Polling kosten ~5 µs pro Call.
+Mit nvidia-peermem (NIC DMA direkt aus GPU Memory): geschaetzt ~6-7 µs → ~133 tok/s (+15%).
+
+19 µs ist NICHT NCCL's architektureller Floor — raw ibverbs zeigt 12.1 µs sind machbar.
+
+### UF19 ibverbs-Pfad: Gescheitert an GB10 Hardware
+
+nvidia-peermem (`sudo modprobe nvidia-peermem`) → `EINVAL`: GB10 hat **kein GPU BAR**
+(BAR1=N/A, FB Memory=N/A). Unified LPDDR5x ohne separaten Framebuffer.
+nvidia-peermem braucht `nvidia_p2p_get_pages()` → braucht GPU BAR → unmoeglich auf GB10.
+
+Ohne peermem: GPU L2 Cache und NIC RDMA DMA sind NICHT koharent auf GB10.
+CPU-Pfad als Workaround funktioniert korrekt, ist aber langsamer als NCCL (86.9 vs 97.4 tok/s).
+
+**Fazit: Raw ibverbs auf GB10 = Sackgasse. NCCL-Transport nutzen, Protokoll vereinfachen.**
+
+### UF19v2: NCCL-basiertes vereinfachtes AllReduce fuer TP=2
+
+NCCL's `ncclAllReduce()` implementiert ein generisches Ring-Protokoll:
+3 sequentielle Sync-Steps (ReduceScatter → AllGather → Barrier) auch bei nur 2 Ranks.
+
+Bei TP=2 reicht stattdessen:
+```
+Rank 0: ncclSend(input, peer=1) + ncclRecv(buf, peer=1) → local add(input + buf) → output
+Rank 1: ncclSend(input, peer=0) + ncclRecv(buf, peer=0) → local add(input + buf) → output
+```
+= **1 bidirektionaler Exchange + lokales Add** statt 3 Ring-Steps.
+
+NCCL handhabt dabei GPU-Kohaerenz korrekt (kein L2-Cache-Problem).
+
+**Gemessen (2026-03-02):**
+```
+                  short    medium    long
+UF19v2 P2P:      55.0     89.5     118.6 tok/s
+NCCL AllReduce:  49.8     86.3     116.6 tok/s
+Delta:          +10.4%   +3.7%    +1.7%
+```
+
+Ergebnis: Kleiner Gewinn (~2 tok/s long). NCCL optimiert bei TP=2 intern bereits:
+Ring mit 2 Ranks ≈ direkter Exchange. Protokoll-Overhead ist ~5µs, nicht ~15µs.
+Der P2P-Pfad spart hauptsaechlich Latenz (sichtbar bei short +10%).
+
+## Naechste Hebel
 
 | Hebel | Erwartung | Machbarkeit |
 |-------|-----------|-------------|
+| **UF19v2 ncclSend/Recv** | **~128 tok/s (+10%)** | **Patch in parallel_state.py, kein ibverbs** |
 | Besseres EAGLE3 Draft-Modell | Hoehere Acceptance Rate → mehr Tokens/Step | Braucht Fine-Tuning |
 | TP=4 (4× GB10) | ~280 tok/s theoretisch, ~150 tok/s realistisch | 2 weitere Knoten noetig |
 | Batch>1 | Bessere Compute-Auslastung | Nur relevant bei mehreren Usern |

@@ -1,0 +1,60 @@
+#!/bin/bash
+# TP=2 vllm-ng-uf19: Qwen3-Coder-30B INT4 AutoRound + EAGLE3 NST=1
+# UF17 + UF19: NCCL-Bypass via raw ibverbs AllReduce
+# Voraussetzung: uf19-tp2-head + uf19-tp2-worker Container laufen
+
+set -euo pipefail
+
+HEAD_CONTAINER="uf19-tp2-head"
+WORKER_CONTAINER="uf19-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+MODEL_PATH="/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound"
+EAGLE3_PATH="/data/tensordata/SGLang-EAGLE3-Qwen3-Coder-30B-A3B"
+MODEL_NAME="qwen3-coder"
+PORT=8011
+MAX_MODEL_LEN=16384
+NST=1
+
+echo "=== vllm-ng-uf19 TP=2 + UF19: Qwen3-Coder INT4 + EAGLE3 ==="
+echo "Modell:  $MODEL_PATH"
+echo "Eagle3:  $EAGLE3_PATH"
+echo "NST:     $NST"
+echo ""
+
+# PGX (Rank 1)
+ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --speculative-model $EAGLE3_PATH \
+      --num-speculative-tokens $NST \
+      --trust-remote-code"
+
+sleep 2
+
+# DGX (Rank 0)
+podman exec "$HEAD_CONTAINER" \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
+    /opt/vllm/serve_torchrun.py \
+      --model "$MODEL_PATH" \
+      --served-model-name "$MODEL_NAME" \
+      --port "$PORT" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --speculative-model "$EAGLE3_PATH" \
+      --num-speculative-tokens "$NST" \
+      --trust-remote-code \
+  2>&1 | tee /tmp/uf19-qwen3coder-eagle3.log
