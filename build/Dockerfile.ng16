@@ -1,20 +1,20 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.01-py3
+ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.02-py3
 FROM ${BASE_IMAGE}
 
 # ============================================================
-# vllm-ng: vLLM nextgen — next2 + torchrun serve + UF17 + UF19
+# vllm-ng16: vLLM 0.16 nextgen — vLLM 0.16.0rc2 + torchrun serve + UF17
+# Base: nvcr.io/nvidia/vllm:26.02-py3 (PyTorch 2.11, CUDA 13.1.1)
 # Targets: SM120a (RTX PRO 6000) + SM121a (DGX Spark GB10)
-# Features over next2:
+# Features:
+#   - vLLM 0.16 (native MTP for GLM-4.7, Qwen3.5, Qwen3-Next)
+#   - transformers 5.2.x
 #   - torchrun-based multi-node TP serving (serve_torchrun.py)
-#   - UF17 EAGER_ALLREDUCE: NCCL outside CUDA Graphs (+82%)
-#   - UF19 RAW_IBVERBS: Custom AllReduce via RDMA (replaces NCCL, +8%)
-#   - MTP speculative decoding with NVFP4 models
-#   - EAGLE3 speculative decoding
+#   - UF17 EAGER_ALLREDUCE: NCCL outside CUDA Graphs
 #   - Marlin SM12x W4A8/W4A16
 #
 # Build:
-#   DGX:      cd build && ./build-ng.sh
-#   Spiegel2: cd build && ./build-ng.sh
+#   DGX:      cd build && ./build-ng16.sh
+#   Spiegel2: cd build && ./build-ng16.sh
 # ============================================================
 
 # CUDA Dev-Header (cusparse.h fehlt im Runtime-Image) + libibverbs (UF19)
@@ -43,12 +43,12 @@ RUN git clone --depth 1 --branch v4.3.5 \
 ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
 
 # ============================================================
-# vLLM from source (pinned to known-good commit)
+# vLLM 0.16.0rc2 from source (commit from vllm-openai:glm5)
 # ============================================================
 RUN git clone --filter=blob:none \
       https://github.com/vllm-project/vllm.git /tmp/vllm-build && \
     cd /tmp/vllm-build && \
-    git checkout f97ca6717
+    git checkout 882682ab8
 
 WORKDIR /tmp/vllm-build
 
@@ -78,23 +78,15 @@ WORKDIR /
 RUN rm -rf /tmp/vllm-build
 
 # ============================================================
-# GLM-4.7 Dependencies (transformers 5, compressed-tensors)
+# transformers 5.2.x + dependencies
 # ============================================================
-RUN pip install --no-cache-dir --no-deps "transformers>=5.0" && \
+RUN pip install --no-cache-dir --no-deps "transformers>=5.2" && \
     pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" && \
     pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
 
 # ============================================================
-# Patch 0: assume_32bit_indexing (PyTorch 2.10.0a0 Bug)
+# Patch 0: assume_32bit_indexing — NICHT MEHR NOETIG (PyTorch 2.11 hat es nativ)
 # ============================================================
-RUN python3 -c "\
-p = '/usr/local/lib/python3.12/dist-packages/torch/_inductor/config.py'; \
-t = open(p).read(); \
-old = 'install_config_module(sys.modules[__name__])'; \
-new = 'assume_32bit_indexing = True\n\ninstall_config_module(sys.modules[__name__])'; \
-t = t.replace(old, new, 1) if 'assume_32bit_indexing' not in t else t; \
-open(p,'w').write(t); \
-print('Patch 0: assume_32bit_indexing added' if 'assume_32bit_indexing' in open(p).read() else 'Patch 0: FAILED')"
 
 # ============================================================
 # Patches 3,4,7,8,11 (OHNE Patch 10 — CUTLASS 4.3.5 hat SM120/121)

@@ -1,0 +1,90 @@
+#!/bin/bash
+# TP=2 vllm-ng16: Universal serve script
+# Usage: ./start.ng16_tp2.serve <model> [eagle3]
+#   model: qwen3coder | glm47 | qwen3next
+#   eagle3: optional, adds EAGLE3 NST=1 (only for qwen3coder)
+
+set -euo pipefail
+
+HEAD_CONTAINER="ng16-tp2-head"
+WORKER_CONTAINER="ng16-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+PORT=8011
+MAX_MODEL_LEN=16384
+
+MODEL_KEY="${1:-}"
+SPEC="${2:-}"
+
+case "$MODEL_KEY" in
+  qwen3coder)
+    MODEL_PATH="/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound"
+    MODEL_NAME="qwen3-coder"
+    EAGLE3_PATH="/data/tensordata/SGLang-EAGLE3-Qwen3-Coder-30B-A3B"
+    ;;
+  glm47)
+    MODEL_PATH="/data/tensordata/GLM-4.7-Flash-int4-AutoRound"
+    MODEL_NAME="glm-4.7-flash"
+    EAGLE3_PATH=""
+    ;;
+  qwen3next)
+    MODEL_PATH="/data/tensordata/Qwen3-Coder-Next-int4-AutoRound"
+    MODEL_NAME="qwen3-coder-next"
+    EAGLE3_PATH=""
+    ;;
+  *)
+    echo "Usage: $0 <qwen3coder|glm47|qwen3next> [eagle3]"
+    exit 1
+    ;;
+esac
+
+# Build extra args
+EXTRA_ARGS=""
+if [ "$SPEC" = "eagle3" ] && [ -n "$EAGLE3_PATH" ]; then
+  EXTRA_ARGS="--speculative-model $EAGLE3_PATH --num-speculative-tokens 1"
+  echo "=== vllm-ng16 TP=2: $MODEL_NAME + EAGLE3 NST=1 ==="
+else
+  echo "=== vllm-ng16 TP=2: $MODEL_NAME (vanilla) ==="
+fi
+echo "Modell: $MODEL_PATH"
+echo ""
+
+# Kill any existing torchrun processes
+podman exec "$HEAD_CONTAINER" bash -c "pkill -f torchrun 2>/dev/null || true" 2>/dev/null || true
+ssh flash@192.168.1.116 "podman exec $WORKER_CONTAINER bash -c 'pkill -f torchrun 2>/dev/null || true'" 2>/dev/null || true
+sleep 2
+
+# PGX (Rank 1)
+ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code \
+      $EXTRA_ARGS"
+
+sleep 2
+
+# DGX (Rank 0)
+podman exec "$HEAD_CONTAINER" \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
+    /opt/vllm/serve_torchrun.py \
+      --model "$MODEL_PATH" \
+      --served-model-name "$MODEL_NAME" \
+      --port "$PORT" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --trust-remote-code \
+      $EXTRA_ARGS \
+  2>&1 | tee "/tmp/ng16-${MODEL_KEY}.log"
