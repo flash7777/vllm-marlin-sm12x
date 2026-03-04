@@ -99,5 +99,51 @@ layer has output_size_per_partition=32 at TP=2. Only works at TP=1.
 | vllm-ng16 (0.16, 26.02) | 68.8 | 75.3 | **73.3** | 100% |
 
 Performance is comparable between vllm-ng and vllm-ng16. The upgrade to vLLM 0.16 + PyTorch 2.11
-shows no regression. Native MTP support for GLM-4.7, Qwen3.5, Qwen3-Next is available but not yet
-benchmarked (requires MTP drafter models).
+shows no regression.
+
+## GLM-4.7-Flash MTP (Multi-Token Prediction)
+
+### Status: NOT YET WORKING
+
+GLM-4.7-Flash has native MTP support (`num_nextn_predict_layers: 1`). The MTP layer is an extra
+decoder layer (layer 47) that acts as a single-token draft predictor — no separate drafter model needed.
+
+**Problem**: INT4 AutoRound quantization drops MTP weights (only layers 0-46 are quantized).
+The BF16 original has 212 MTP tensors at `model.layers.47.*` (2.5 GB).
+
+**Attempted solutions**:
+1. Extract BF16 MTP weights into INT4 model → KeyError: FusedMoE expects stacked format
+   (`experts.w13_weight`) but BF16 has individual expert format (`experts.0.gate_proj.weight`)
+2. Use full BF16 model as MTP source via `--speculative-config '{"method":"mtp","model":"..."}'`
+   → Server hangs at NCCL init (likely OOM loading full 60GB BF16 model as MTP source)
+
+**Root cause**: vLLM 0.16's MTP loader (`glm4_moe_lite_mtp.py`) applies the same quantization
+scheme to MTP layers. When the base model is GPTQ-quantized, MTP weights must also be in
+stacked FusedMoE format with GPTQ metadata (qweight, qzeros, scales, g_idx).
+
+**Next steps**: Either (a) quantize MTP layer with AutoRound, (b) create a standalone MTP-only
+model directory with just layer 47, or (c) patch vLLM to load MTP weights as BF16 regardless
+of base model quantization.
+
+See `build/extract_mtp_weights.py` for the weight extraction script.
+
+## Qwen3-Coder-Next: Marlin min_thread_n=64 Analysis
+
+### Can Marlin be patched for output_size_per_partition < 64?
+
+**No.** The `min_thread_n=64` constraint is a software design limitation deeply embedded in the
+Marlin CUDA kernel's warp-scheduling architecture:
+
+- `thread_n_blocks = thread_n / 16` (tile_size=16)
+- Multiple kernel calculations use `thread_n_blocks / 4` as integer division
+- With thread_n=32: `thread_n_blocks=2`, `2/4=0` → **integer division breaks**
+- Shared memory strides, warp group indexing, and register allocation all depend on this
+
+The kernel supports only thread_n values of {64, 128, 256}. Reducing to 32 would require
+a complete kernel rewrite of the warp-scheduling math, with high risk of correctness issues
+and performance regression.
+
+**Workarounds for Qwen3-Coder-Next at TP=2**:
+1. TP=1 (output_size_per_partition=64, works)
+2. Use `--quantization gptq` instead of Marlin (no min_thread_n constraint, ~5-10% slower)
+3. Pad the problematic layer to 64 during quantization (model modification)
