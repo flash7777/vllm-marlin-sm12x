@@ -76,11 +76,29 @@
 | 8K | 20.9 | 32.3 | 32.2 |
 | 16K | 13.1 | 21.1 | 21.0 |
 
-## Qwen3-Coder-Next INT4 AutoRound (vanilla)
+## Qwen3-Coder-Next INT4 AutoRound (vanilla, eager mode)
 
-**FAILED** at TP=2: `Weight output_size_per_partition = 32 is not divisible by min_thread_n = 64`.
-Marlin kernel requires minimum partition size of 64, but Qwen3-Next's linear_attn `in_proj_ba`
-layer has output_size_per_partition=32 at TP=2. Only works at TP=1.
+**WORKS** at TP=2 with Marlin N-padding patch (`build/patch_marlin_padding.py`).
+
+Qwen3-Next's `linear_attn.in_proj_ba` layer has `output_size_per_partition=32` at TP=2.
+The padding patch zero-pads weights to 64 before `gptq_marlin_repack`, runs the kernel with
+padded N, then slices output back to actual N. 66 layers are padded per rank.
+
+**Note**: Requires `--enforce-eager` due to torch.compile AssertionError with Qwen3-Next's
+hybrid Mamba+Attention architecture (AOT autograd output spec mismatch). This is a separate
+issue unrelated to Marlin padding.
+
+### Performance (n=5, enforce-eager)
+
+| Prompt | tok/s |
+|--------|-------|
+| short | 17.4 |
+| medium | 25.6 |
+| long | **26.3** |
+| Math | 47/50 (**94%**) |
+
+Performance is limited by eager mode (no CUDA graphs). With torch.compile support, expect
+~4x improvement (similar to other models' eager vs compiled difference).
 
 ## Comparison: vllm-ng (0.15) vs vllm-ng16 (0.16)
 
@@ -141,23 +159,30 @@ params (`w13_weight`/`w2_weight`) instead of GPTQ params (`qweight`/`qzeros`/`sc
 The patch temporarily sets `vllm_config.quant_config=None` during MTP model construction,
 using `object.__setattr__` to bypass `VllmConfig.__post_init__` re-calculation.
 
-## Qwen3-Coder-Next: Marlin min_thread_n=64 Analysis
+## Qwen3-Coder-Next: Marlin N-Padding Solution
 
-### Can Marlin be patched for output_size_per_partition < 64?
+### Problem
 
-**No.** The `min_thread_n=64` constraint is a software design limitation deeply embedded in the
-Marlin CUDA kernel's warp-scheduling architecture:
+The Marlin CUDA kernel requires `output_size_per_partition % 64 == 0`. Qwen3-Next's
+`linear_attn.in_proj_ba` layer has only 32 output channels at TP=2. The `min_thread_n=64`
+constraint comes from the kernel's warp-scheduling: `thread_n_blocks / 4` integer division
+breaks at thread_n=32.
 
-- `thread_n_blocks = thread_n / 16` (tile_size=16)
-- Multiple kernel calculations use `thread_n_blocks / 4` as integer division
-- With thread_n=32: `thread_n_blocks=2`, `2/4=0` → **integer division breaks**
-- Shared memory strides, warp group indexing, and register allocation all depend on this
+### Solution: Zero-Padding (patch_marlin_padding.py)
 
-The kernel supports only thread_n values of {64, 128, 256}. Reducing to 32 would require
-a complete kernel rewrite of the warp-scheduling math, with high risk of correctness issues
-and performance regression.
+Instead of modifying the CUDA kernel, we zero-pad weights at the Python level:
 
-**Workarounds for Qwen3-Coder-Next at TP=2**:
-1. TP=1 (output_size_per_partition=64, works)
-2. Use `--quantization gptq` instead of Marlin (no min_thread_n constraint, ~5-10% slower)
-3. Pad the problematic layer to 64 during quantization (model modification)
+1. **Before repack**: Pad raw qweight `[K/pack, N]` from N=32 to N=64 along dim=1
+2. **Before permute**: Pad scales `[groups, N]` from N=32 to N=64 along dim=1
+3. **At inference**: Pass `output_size_per_partition=64` to the Marlin kernel
+4. **After inference**: Slice output `[batch, 64]` → `[batch, 32]`
+
+This is mathematically correct: zero-padded weight columns produce zero output columns
+that are sliced away. The patch is applied at model loading time, so inference overhead
+is just the extra 32 output columns per padded layer (negligible).
+
+### Remaining Issue: torch.compile
+
+Qwen3-Next crashes during `torch.compile` graph capture (AssertionError in AOT autograd
+output spec mismatch — hybrid Mamba+Attention architecture). Requires `--enforce-eager`
+as workaround, which significantly reduces throughput (~4x slower than compiled).
