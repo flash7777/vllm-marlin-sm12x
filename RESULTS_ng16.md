@@ -91,41 +91,55 @@ layer has output_size_per_partition=32 at TP=2. Only works at TP=1.
 | vllm-ng (0.15, 26.01) | 50.2 | 89.1 | **118.8** | 76% |
 | vllm-ng16 (0.16, 26.02) | 7.2 | 87.7 | **116.9** | 76% |
 
-### GLM-4.7-Flash INT4 vanilla
+### GLM-4.7-Flash INT4
 
-| Version | short | medium | long | Math |
-|---------|-------|--------|------|------|
-| vllm-ng (0.15, 26.01) | 70.5 | 74.1 | **72.4** | 98% |
-| vllm-ng16 (0.16, 26.02) | 68.8 | 75.3 | **73.3** | 100% |
+| Version | Spec | short | medium | long | Math |
+|---------|------|-------|--------|------|------|
+| vllm-ng (0.15, 26.01) | vanilla | 70.5 | 74.1 | **72.4** | 98% |
+| vllm-ng16 (0.16, 26.02) | vanilla | 68.8 | 75.3 | **73.3** | 100% |
+| vllm-ng16 (0.16, 26.02) | MTP NST=1 | 90.8 | 106.2 | **105.4** | 100% |
 
-Performance is comparable between vllm-ng and vllm-ng16. The upgrade to vLLM 0.16 + PyTorch 2.11
-shows no regression.
+MTP gives **+44%** throughput over vanilla (105.4 vs 73.3 tok/s) with no accuracy loss.
+Performance is comparable between vllm-ng and vllm-ng16 for vanilla. The upgrade to vLLM 0.16
+enables native MTP support.
 
-## GLM-4.7-Flash MTP (Multi-Token Prediction)
+## GLM-4.7-Flash INT4 AutoRound + MTP NST=1
 
-### Status: NOT YET WORKING
+### Performance (n=5)
+
+| Prompt | tok/s |
+|--------|-------|
+| short | 90.8 |
+| medium | 106.2 |
+| long | **105.4** |
+| Math | 50/50 (**100%**) |
+
+### Context Scaling
+
+| ctx | short | medium | long |
+|-----|-------|--------|------|
+| 0 | 88.1 | 105.4 | 107.8 |
+| 512 | 75.0 | 92.4 | 102.5 |
+| 2K | 58.2 | 79.7 | 83.6 |
+| 8K | 20.3 | 51.5 | 51.2 |
+| 16K | 16.1 | 34.3 | 36.0 |
+
+### MTP Setup
 
 GLM-4.7-Flash has native MTP support (`num_nextn_predict_layers: 1`). The MTP layer is an extra
 decoder layer (layer 47) that acts as a single-token draft predictor — no separate drafter model needed.
 
-**Problem**: INT4 AutoRound quantization drops MTP weights (only layers 0-46 are quantized).
-The BF16 original has 212 MTP tensors at `model.layers.47.*` (2.5 GB).
+**Prerequisites**:
+1. Extract BF16 MTP weights into INT4 model: `build/extract_mtp_weights.py`
+2. Apply `build/patch_mtp_bf16_weights.py` (patches `eagle.py` to temporarily disable
+   quant_config during MTP model loading)
+3. Set `VLLM_MTP_FORCE_BF16=1` at runtime
 
-**Attempted solutions**:
-1. Extract BF16 MTP weights into INT4 model → KeyError: FusedMoE expects stacked format
-   (`experts.w13_weight`) but BF16 has individual expert format (`experts.0.gate_proj.weight`)
-2. Use full BF16 model as MTP source via `--speculative-config '{"method":"mtp","model":"..."}'`
-   → Server hangs at NCCL init (likely OOM loading full 60GB BF16 model as MTP source)
-
-**Root cause**: vLLM 0.16's MTP loader (`glm4_moe_lite_mtp.py`) applies the same quantization
-scheme to MTP layers. When the base model is GPTQ-quantized, MTP weights must also be in
-stacked FusedMoE format with GPTQ metadata (qweight, qzeros, scales, g_idx).
-
-**Next steps**: Either (a) quantize MTP layer with AutoRound, (b) create a standalone MTP-only
-model directory with just layer 47, or (c) patch vLLM to load MTP weights as BF16 regardless
-of base model quantization.
-
-See `build/extract_mtp_weights.py` for the weight extraction script.
+**Why the patch is needed**: INT4 AutoRound drops MTP weights (only layers 0-46 quantized).
+BF16 MTP weights must be loaded with `quant_config=None` so FusedMoE creates unquantized
+params (`w13_weight`/`w2_weight`) instead of GPTQ params (`qweight`/`qzeros`/`scales`).
+The patch temporarily sets `vllm_config.quant_config=None` during MTP model construction,
+using `object.__setattr__` to bypass `VllmConfig.__post_init__` re-calculation.
 
 ## Qwen3-Coder-Next: Marlin min_thread_n=64 Analysis
 
