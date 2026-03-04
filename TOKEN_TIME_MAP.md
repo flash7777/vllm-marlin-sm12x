@@ -35,11 +35,12 @@ Quelle: bench.py (long, 400 Tokens, seed=42, n=5), 2026-03-02
 
 | # | Phase | pro Aufruf | × Aufrufe | Gesamt | % | Typ | Quelle |
 |---|-------|-----------|-----------|--------|---|-----|--------|
-| 1 | **AllReduce (NCCL eager)** | 19.4 µs | 97 | **1.88 ms** | **22.2%** | [M] | nsys NVTX median |
-| 1a | ↳ NCCL Protokoll-Overhead | ~15 µs | 97 | 1.46 ms | 17.2% | [E] | GPU-Kernel Setup+Sync |
-| 1b | ↳ GPU Reduce (Addition) | ~1 µs | 97 | 0.10 ms | 1.2% | [E] | 4 KiB elementweise Add |
-| 1c | ↳ RoCE Datentransfer | ~0.2 µs | 97 | 0.02 ms | 0.2% | [M] | 4 KiB @ 25 GB/s |
-| 1d | ↳ Sonstiges (Launch etc.) | ~3 µs | 97 | 0.30 ms | 3.5% | [E] | Kernel-Dispatch |
+| 1 | **AllReduce (NCCL, in CUDA Graph)** | 19.4 µs | 97 | **1.88 ms** | **22.2%** | [M] | nsys NVTX median |
+| 1a | ↳ Proxy-Roundtrip (GPU↔CPU↔NIC) | ~10 µs | 97 | 0.97 ms | 11.5% | [E] | Proxy pollt GPU-Flag, postet ibverbs, signalisiert zurueck |
+| 1b | ↳ Ring-Overhead (2. Phase) | ~2.5 µs | 97 | 0.24 ms | 2.9% | [M] | UF19v2 spart ~1.5µs/Call |
+| 1c | ↳ RoCE RTT | ~3 µs | 97 | 0.29 ms | 3.4% | [M] | ib_write_lat: 3.2µs |
+| 1d | ↳ GPU Reduce + Kernel-Launch | ~2 µs | 97 | 0.19 ms | 2.3% | [E] | 4 KiB Add + CUDA Launch |
+| 1e | ↳ Datentransfer (4 KiB) | ~0.2 µs | 97 | 0.02 ms | 0.2% | [M] | 4 KiB @ 25 GB/s |
 | 2 | **MoE GEMMs (Marlin)** | — | 96 | **2.55 ms** | **30.1%** | [M/nsys] | marlin_moe_wna16 |
 | 2a | ↳ Gate+Up GEMM (8 Exp) | 39.1 µs | 48 | 1.88 ms | 22.2% | [M/nsys] | 8×2048×1536 INT4, med |
 | 2b | ↳ Down GEMM (8 Exp) | 59.1 µs | 48 | 2.84 ms | — | [M/nsys] | 8×768×2048 INT4, med |
@@ -60,7 +61,7 @@ Quelle: bench.py (long, 400 Tokens, seed=42, n=5), 2026-03-02
 | 6b | ↳ SiLU (act_and_mul) | 4.8 µs | 48 | 0.23 ms | 2.7% | [M/nsys] | 1 pro Layer, med |
 | 6* | ↳ *nsys-proportional* | — | — | *0.31 ms* | — | | *Budget-Zuordnung* |
 | 7 | **KV-Cache Write** | 2.5 µs | 48 | **0.12 ms** | **1.4%** | [M/nsys] | reshape_and_cache |
-| 8 | **CPU Scheduling + Launch** | — | — | **~0.46 ms** | **~5.4%** | [E] | vLLM Scheduler + Graph |
+| 8 | **CPU Scheduling + Framework** | — | — | **~0.46 ms** | **~5.4%** | [E] | Scheduler+Input+Sampling |
 | 9 | **Sonstiges** | — | — | **~0.11 ms** | **~1.3%** | [E] | Embedding, LM-Head, Sampling |
 | | **Summe** | | | **8.47 ms** | **100%** | [M] | bench.py |
 
@@ -86,6 +87,12 @@ nsys GPU-Kernel-Zeiten (aggregiert, ~46 Warmup-Passes):
 Proportionale Zuordnung auf 6.59ms verfuegbare GPU-Zeit:
 6.59 × Anteil = Wert pro Token-Step.
 CPU-Overhead (0.61ms) = Token-Zeit - GPU-Kernelzeit = 8.47 - 7.86 = 0.61ms.
+
+Hinweis: Piecewise CUDA Graphs kompilieren den FX-Graph in Segmente,
+aber der CUDA-Graph-Capture erfasst ALLES (Compute + NCCL AllReduce)
+in EINEN grossen Graph. Replay = 1× cudaGraphLaunch(), KEIN Python-Loop.
+Python-Overhead entsteht nur zwischen Token-Steps (Scheduler, Sampling,
+EAGLE3-Orchestrierung), NICHT innerhalb der 97 AllReduce-Iterationen.
 
 ## nsys Kernel-Details
 
@@ -118,6 +125,13 @@ Anmerkungen:
 - NVTX Median (19.4µs) bestaetigt unabhaengige CUDA-Events-Messung (19.0µs)
 - Relative Proportionen der Compute-Kernels sind zuverlaessig
 - Absolute GPU-Kernelzeiten um ~2-3× durch nsys-Overhead inflated
+- AllReduce ist IN den CUDA Graph captured (nicht eager zwischen Segmenten)
+- Piecewise = Compilation-Konzept; Execution = 1× cudaGraphLaunch()
+- NCCL-Overhead (~17µs) setzt sich zusammen aus: Proxy-Roundtrip GPU↔CPU↔NIC (~10µs),
+  Ring 2. Phase (~2.5µs), RoCE RTT (~3µs), GPU Kernel-Launch+Add (~2µs)
+- Proxy-Thread ist Hauptquelle: GB10 hat kein GPUDirect → NIC kann nicht direkt
+  aus GPU-Speicher lesen → CPU-Proxy vermittelt mit ~10µs Overhead
+- UF19v2 ncclSend/Recv eliminiert Ring-Phase → nur ~1.5µs/Call Verbesserung
 
 ### NVTX Zusammenfassung
 
@@ -227,7 +241,7 @@ Treiber: KV-Cache Attention (FlashAttn Compute steigt linear mit Kontext).
 | MoE Routing + Permutation | nsys | MITTEL | DONE (proportional aus nsys) |
 | EAGLE3 Draft-Forward separat | nsys mit NVTX | MITTEL | Teilweise (nicht separierbar) |
 | CPU Scheduling Overhead | CPU profiler | NIEDRIG | Residual: 0.61ms |
-| Piecewise Split Kosten | nsys Graph-Segmente | MITTEL | In CPU-Overhead enthalten |
+| Piecewise Split Kosten | nsys Graph-Segmente | ERLEDIGT | Kein Python-Overhead (alles in CUDA Graph) |
 | Per-Layer CUDA Events | Custom CUDA Events in Code | OPTIONAL | Wuerde nsys-Overhead eliminieren |
 
 ## nsys Profiling Setup

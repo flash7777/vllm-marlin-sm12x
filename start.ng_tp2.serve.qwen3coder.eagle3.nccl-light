@@ -1,0 +1,71 @@
+#!/bin/bash
+# TP=2 vllm-ng: Qwen3-Coder INT4 + EAGLE3 — NCCL with UF19 Net Plugin
+# Uses NCCL kernels (handles L2 coherence) + UF19 minimal ibverbs transport
+# Voraussetzung: ng-tp2-head + ng-tp2-worker Container laufen
+
+set -euo pipefail
+
+HEAD_CONTAINER="ng-tp2-head"
+WORKER_CONTAINER="ng-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+MODEL_PATH="/data/tensordata/Qwen3-Coder-30B-A3B-Instruct-int4-AutoRound"
+EAGLE3_PATH="/data/tensordata/SGLang-EAGLE3-Qwen3-Coder-30B-A3B"
+MODEL_NAME="qwen3-coder"
+PORT=8011
+MAX_MODEL_LEN=16384
+NST=1
+
+# NCCL Net Plugin env vars (override container defaults)
+NCCL_ENV="VLLM_UF_UF19_RDMA=0 NCCL_NET_PLUGIN=uf19 LD_LIBRARY_PATH=/opt/vllm:\$LD_LIBRARY_PATH NCCL_DEBUG=INFO"
+
+echo "=== vllm-ng TP=2: NCCL + UF19 Net Plugin ==="
+echo "Modell:  $MODEL_PATH"
+echo "Eagle3:  $EAGLE3_PATH"
+echo "Plugin:  libnccl-net-uf19.so (minimal ibverbs)"
+echo ""
+
+# PGX (Rank 1)
+ssh flash@192.168.1.116 "podman exec -d \
+  -e VLLM_UF_UF19_RDMA=0 \
+  -e NCCL_NET_PLUGIN=uf19 \
+  -e NCCL_DEBUG=INFO \
+  $WORKER_CONTAINER \
+  bash -c 'export LD_LIBRARY_PATH=/opt/vllm:\$LD_LIBRARY_PATH && torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --speculative-model $EAGLE3_PATH \
+      --num-speculative-tokens $NST \
+      --trust-remote-code'"
+
+sleep 2
+
+# DGX (Rank 0)
+podman exec \
+  -e VLLM_UF_UF19_RDMA=0 \
+  -e NCCL_NET_PLUGIN=uf19 \
+  -e NCCL_DEBUG=INFO \
+  "$HEAD_CONTAINER" \
+  bash -c "export LD_LIBRARY_PATH=/opt/vllm:\$LD_LIBRARY_PATH && torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --quantization auto_round \
+      --speculative-model $EAGLE3_PATH \
+      --num-speculative-tokens $NST \
+      --trust-remote-code" \
+  2>&1 | tee /tmp/ng-nccl-light.log

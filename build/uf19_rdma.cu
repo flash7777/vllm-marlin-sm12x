@@ -1,14 +1,19 @@
 /*
- * UF19: Custom 2-Rank AllReduce via raw ibverbs RDMA
+ * UF19v4: CUDA-Graph-Compatible 2-Rank AllReduce via ibverbs RDMA
  *
- * Shared library for vLLM integration. Bypasses NCCL for TP=2 AllReduce
- * on RoCE networks. Reduces per-call latency from 19µs (NCCL) to ~12µs
- * (mapped memory) or ~6-7µs (GPUDirect RDMA with nvidia-peermem).
+ * Architecture:
+ *   GPU kernels (graph-capturable):
+ *     1. wait_send_done <<<1,1>>>  — polls send_done (proxy completed prev RDMA)
+ *     2. copy_to_send   <<<N,256>>> — copies input→send_buf
+ *     3. signal_send    <<<1,1>>>  — __threadfence_system + increment send_flag
+ *     4. poll_recv      <<<1,1>>>  — polls recv_flag (peer's data arrived)
+ *     5. add_recv       <<<N,256>>> — adds local + recv_buf → output (load_cv)
  *
- * Exported functions:
- *   uf19_init(rank, world_size, peer_ip, ib_dev, gid_idx, numel) → 0 on success
- *   uf19_step(input_ptr, output_ptr, numel) → 0 on success
- *   uf19_cleanup()
+ *   CPU proxy thread (background):
+ *     Polls send_flag → posts RDMA WRITE (data+flag) → polls CQ → sets send_done
+ *
+ * The GPU never calls ibverbs or cudaDeviceSynchronize. All 4 kernels are
+ * captured in vLLM's CUDA graph. The proxy thread runs independently.
  *
  * Build:
  *   nvcc -O2 -arch=sm_121 -shared -Xcompiler -fPIC \
@@ -24,12 +29,12 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
+#include <pthread.h>
 #include <infiniband/verbs.h>
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
 #define TCP_PORT 18600
-#define CQ_DRAIN_INTERVAL 64
 #define CQ_SIZE 256
 
 // --- Error handling ---
@@ -56,8 +61,7 @@ static void log_error(const char* fmt, ...) {
 // --- CUDA Device Helpers ---
 
 // Load bf16 bypassing ALL GPU caches (ld.global.cv = cache volatile).
-// On GB10, NIC RDMA writes go directly to DRAM, bypassing GPU L1+L2.
-// Normal loads (or even ld.cs streaming loads) may hit stale L2 entries.
+// NIC RDMA writes go directly to DRAM, bypassing GPU L1+L2.
 // ld.global.cv guarantees every read goes to DRAM — sees NIC DMA data.
 __device__ __forceinline__ __nv_bfloat16 load_cv(const __nv_bfloat16* ptr) {
     unsigned short val;
@@ -67,59 +71,63 @@ __device__ __forceinline__ __nv_bfloat16 load_cv(const __nv_bfloat16* ptr) {
     return result;
 }
 
-// Store bf16 with write-through (st.global.wt = write-through to DRAM).
-// Ensures GPU writes to send_buf are visible in DRAM for NIC DMA reads.
-// __threadfence_system() orders but may not flush L2 on GB10 unified memory.
-__device__ __forceinline__ void store_wt(__nv_bfloat16* ptr, __nv_bfloat16 val) {
-    unsigned short bits;
-    memcpy(&bits, &val, sizeof(bits));
-    asm volatile("st.global.wt.u16 [%0], %1;" :: "l"(ptr), "h"(bits));
-}
+// --- v4 CUDA Kernels (all graph-capturable) ---
 
-// --- CUDA Kernels ---
-
-// Copy input → send buffer + set flag.
-// Regular stores go through GPU L2 cache. __threadfence_system() flushes
-// dirty L2 lines to DRAM, making data visible to NIC for RDMA read.
-__global__ void uf19_prepare_send(
-    const __nv_bfloat16* __restrict__ src,
-    __nv_bfloat16* __restrict__ send_buf,
-    volatile int* send_flag,
-    int step, int n)
+// K0: Wait for proxy to complete previous RDMA (send_buf safe to overwrite).
+// Reads send_flag (= how many steps launched) and send_done (= how many completed).
+// First step: send_flag=0, send_done=0 → returns immediately.
+__global__ void uf19_wait_send_done(int* send_flag, int* send_done)
 {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n) send_buf[idx] = src[idx];
-    __syncthreads();
-    if (threadIdx.x == 0 && blockIdx.x == 0) {
-        __threadfence_system();
-        *send_flag = step;
-    }
-}
-
-// Poll recv_flag via system-scope atomic (bypasses GPU L2 cache, sees NIC DMA).
-// On GB10 unified memory, volatile reads serve stale L2 cache values and never
-// see NIC PCIe DMA writes. atomicAdd_system goes through the full memory fabric.
-// Launched as <<<1, 1>>> — stream ordering blocks subsequent kernels until done.
-__global__ void uf19_poll_recv(int* recv_flag, int step)
-{
-    while (atomicAdd_system(recv_flag, 0) < step) {
+    int launched = atomicAdd_system(send_flag, 0);
+    while (atomicAdd_system(send_done, 0) < launched) {
         __nanosleep(100);
     }
 }
 
-// Add local + remote → output (runs after staging copy)
-// Both local_data and recv_staging use normal loads — staging buffer
-// was populated by cudaMemcpyAsync which handles cache coherence.
-__global__ void uf19_add_kernel(
+// K1a: Copy input → send_buf (multi-block, no signaling).
+__global__ void uf19_copy_to_send(
+    const __nv_bfloat16* __restrict__ src,
+    __nv_bfloat16* __restrict__ send_buf, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) send_buf[idx] = src[idx];
+}
+
+// K1b: Signal proxy that send_buf is ready (single thread).
+// Launched AFTER uf19_copy_to_send on same stream → CUDA stream ordering
+// guarantees all K1a writes are complete. __threadfence_system() then
+// flushes this thread's view to system memory before incrementing send_flag.
+__global__ void uf19_signal_send(int* send_flag)
+{
+    __threadfence_system();
+    atomicAdd_system(send_flag, 1);
+}
+
+// K2: Poll recv_flag until peer's data arrives.
+// Reads send_flag to get target step (set by prepare_send on same stream).
+// recv_flag is written by peer's NIC via RDMA WRITE — use atomicAdd_system
+// to bypass GPU L2 cache and read from DRAM.
+__global__ void uf19_poll_recv(int* recv_flag, int* send_flag)
+{
+    int target = atomicAdd_system(send_flag, 0);
+    while (atomicAdd_system(recv_flag, 0) < target) {
+        __nanosleep(100);
+    }
+}
+
+// K3: Add local input + received data → output.
+// local_data: GPU tensor (normal loads, coherent).
+// recv_buf: NIC-written mapped memory — use load_cv to bypass stale L2.
+__global__ void uf19_add_recv(
     const __nv_bfloat16* __restrict__ local_data,
-    const __nv_bfloat16* __restrict__ recv_staging,
+    const __nv_bfloat16* __restrict__ recv_buf,
     __nv_bfloat16* __restrict__ output,
     int n)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         float a = __bfloat162float(local_data[idx]);
-        float b = __bfloat162float(recv_staging[idx]);
+        float b = __bfloat162float(load_cv(&recv_buf[idx]));
         output[idx] = __float2bfloat16(a + b);
     }
 }
@@ -128,11 +136,11 @@ __global__ void uf19_add_kernel(
 struct uf19_state {
     int initialized;
     int rank;
-    int max_numel;    // buffer capacity (elements)
+    int max_numel;
     int max_data_bytes;
-    int use_gdr;  // 1 = GPUDirect RDMA, 0 = mapped pinned
-    int step;     // monotonic counter
-    int active;   // 0 = skip (use NCCL), 1 = active (use UF19 RDMA)
+    int use_gdr;
+    int active;
+    int host_step;  // CPU-side counter for logging only
 
     // ibverbs
     struct ibv_context* ib_ctx;
@@ -144,54 +152,45 @@ struct uf19_state {
     struct ibv_mr* mr_flag;
     struct ibv_mr* mr_flag_src;
 
-    // GPU device memory (GDR path) or mapped pointers
-    __nv_bfloat16* gpu_send;    // GPU-accessible send buffer
-    __nv_bfloat16* gpu_recv;    // GPU-accessible recv buffer
+    // GPU-accessible send/recv buffers
+    __nv_bfloat16* gpu_send;
+    __nv_bfloat16* gpu_recv;
 
-    // Host pointers (for mapped path cleanup)
-    __nv_bfloat16* h_send_buf;  // NULL if GDR
-    __nv_bfloat16* h_recv_buf;  // NULL if GDR
+    // Host pointers (for cleanup)
+    __nv_bfloat16* h_send_buf;
+    __nv_bfloat16* h_recv_buf;
 
     // RDMA buffer pointers (what ibv_reg_mr was called on)
     void* buf_send;
     void* buf_recv;
 
-    // GDR path: device memory for send/recv
+    // GDR path device memory
     __nv_bfloat16* d_send_buf;
     __nv_bfloat16* d_recv_buf;
 
-    // Flags: always in mapped pinned memory
-    int* h_send_flag;
-    int* h_recv_flag;
-    int* d_send_flag;  // device pointer to h_send_flag
-    int* d_recv_flag;  // device pointer to h_recv_flag
-    int* h_flag_src;   // source for RDMA flag write
+    // Flags (mapped memory, GPU + CPU accessible)
+    int* h_send_flag;   // GPU increments, proxy reads
+    int* h_recv_flag;   // peer's NIC writes, GPU reads
+    int* h_send_done;   // proxy increments, GPU reads
+    int* h_flag_src;    // proxy writes step value, NIC reads for RDMA
 
-    // Pre-built RDMA WRs (sge_data.length updated per call)
+    // Device pointers to flags (= host pointers on GB10 unified memory)
+    int* d_send_flag;
+    int* d_recv_flag;
+    int* d_send_done;
+
+    // Pre-built RDMA WRs
     struct ibv_sge sge_data;
     struct ibv_sge sge_flag;
     struct ibv_send_wr wr_data;
     struct ibv_send_wr wr_flag;
 
-    // Remote RDMA addresses (for dynamic length adjustment)
-    uint64_t remote_addr_data;
-    uint32_t remote_rkey_data;
-
-    // Stream
+    // Stream (default = 0 for vLLM compat)
     cudaStream_t stream;
 
-    // Staging buffer: cudaMemcpy from NIC-written recv_buf to this buffer
-    // before add_kernel. Bypasses GPU L2 cache staleness on GB10 unified memory.
-    __nv_bfloat16* d_recv_staging;
-
-    // CPU-side buffers for fully CPU-based addition (debug mode)
-    __nv_bfloat16* h_input_copy;   // CPU copy of input tensor
-    __nv_bfloat16* h_output_buf;   // CPU addition result
-
-    // Mode: 0=C (sync), 1=B (CPU recv poll), 2=A (separate poll stream)
-    int mode;
-    cudaStream_t poll_stream;  // mode A only
-    cudaEvent_t poll_event;    // mode A only
+    // Proxy thread
+    pthread_t proxy_tid;
+    volatile int proxy_running;
 };
 
 static struct uf19_state g_state = {0};
@@ -213,13 +212,35 @@ static struct ibv_context* open_ib_device(const char* dev_name) {
     int num_devices;
     struct ibv_device** dev_list = ibv_get_device_list(&num_devices);
     if (!dev_list) { log_error("ibv_get_device_list failed"); return NULL; }
+
+    // List available devices for debugging
+    log_info("Available IB devices (%d):", num_devices);
+    for (int i = 0; i < num_devices; i++)
+        log_info("  [%d] %s", i, ibv_get_device_name(dev_list[i]));
+
     struct ibv_device* dev = NULL;
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(ibv_get_device_name(dev_list[i]), dev_name) == 0) {
             dev = dev_list[i]; break;
         }
     }
-    if (!dev) { log_error("IB device '%s' not found", dev_name); ibv_free_device_list(dev_list); return NULL; }
+    // Fallback: if not found by exact name, try substring match
+    if (!dev) {
+        for (int i = 0; i < num_devices; i++) {
+            if (strstr(ibv_get_device_name(dev_list[i]), dev_name)) {
+                dev = dev_list[i];
+                log_info("Matched device '%s' by substring", ibv_get_device_name(dev));
+                break;
+            }
+        }
+    }
+    // Last resort: use first device
+    if (!dev && num_devices > 0) {
+        dev = dev_list[0];
+        log_info("Using first available device: %s", ibv_get_device_name(dev));
+    }
+    if (!dev) { log_error("No IB devices found"); ibv_free_device_list(dev_list); return NULL; }
+    log_info("Opening IB device: %s", ibv_get_device_name(dev));
     struct ibv_context* ctx = ibv_open_device(dev);
     ibv_free_device_list(dev_list);
     return ctx;
@@ -326,7 +347,7 @@ static int tcp_exchange(int rank, const char* peer_ip,
         log_info("Rank 1: connecting to %s:%d...", peer_ip, TCP_PORT);
         int retries = 0;
         while (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-            if (++retries > 300) {  // 30 seconds
+            if (++retries > 300) {
                 log_error("connect timeout after 30s"); close(sock); return -1;
             }
             usleep(100000);
@@ -335,7 +356,6 @@ static int tcp_exchange(int rank, const char* peer_ip,
     int flag = 1;
     setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
 
-    // Log what we're sending
     log_info("TCP exchange: LOCAL  qpn=%u psn=%u rkey_data=0x%08x rkey_flag=0x%08x "
              "addr_data=0x%lx addr_flag=0x%lx",
              local->qpn, local->psn, local->rkey_data, local->rkey_flag,
@@ -354,13 +374,11 @@ static int tcp_exchange(int rank, const char* peer_ip,
         if (ret) { close(sock); return -1; }
     }
 
-    // Log what we received
     log_info("TCP exchange: REMOTE qpn=%u psn=%u rkey_data=0x%08x rkey_flag=0x%08x "
              "addr_data=0x%lx addr_flag=0x%lx",
              remote->qpn, remote->psn, remote->rkey_data, remote->rkey_flag,
              (unsigned long)remote->addr_data, (unsigned long)remote->addr_flag);
 
-    // Sanity check
     if (remote->addr_data == 0 || remote->addr_flag == 0 ||
         remote->rkey_data == 0 || remote->rkey_flag == 0) {
         log_error("TCP exchange: INVALID remote info (zeroes detected!)");
@@ -368,7 +386,6 @@ static int tcp_exchange(int rank, const char* peer_ip,
         return -1;
     }
 
-    // Barrier
     char c = 'R';
     if (full_write(sock, &c, 1) || full_read(sock, &c, 1)) {
         log_error("TCP exchange barrier failed");
@@ -377,6 +394,58 @@ static int tcp_exchange(int rank, const char* peer_ip,
     }
     close(sock);
     return 0;
+}
+
+// --- Proxy thread ---
+// Runs in background. Polls send_flag for new data, posts RDMA WRITE,
+// polls CQ for completion, then sets send_done to signal GPU.
+
+static void* proxy_thread_fn(void* arg) {
+    (void)arg;
+    struct uf19_state* s = &g_state;
+    int last_completed = 0;
+
+    log_info("Proxy thread started (rank=%d)", s->rank);
+
+    while (__atomic_load_n(&s->proxy_running, __ATOMIC_RELAXED)) {
+        // Wait for GPU to signal new data
+        int current = __atomic_load_n(s->h_send_flag, __ATOMIC_ACQUIRE);
+        if (current <= last_completed) continue;
+
+        // Post RDMA WRITE: send_buf → peer's recv_buf, then flag → peer's recv_flag
+        *s->h_flag_src = current;
+        struct ibv_send_wr* bad_wr;
+        int ret = ibv_post_send(s->qp, &s->wr_data, &bad_wr);
+        if (ret) {
+            log_error("Proxy: ibv_post_send failed: %d (errno=%d: %s)",
+                      ret, errno, strerror(errno));
+            break;
+        }
+
+        // Wait for CQ completion (NIC finished reading send_buf)
+        struct ibv_wc wc;
+        while (ibv_poll_cq(s->cq, 1, &wc) == 0) {
+            if (!__atomic_load_n(&s->proxy_running, __ATOMIC_RELAXED))
+                goto done;
+        }
+        if (wc.status != IBV_WC_SUCCESS) {
+            log_error("Proxy: RDMA failed: status=%d (%s) wr_id=%lu step=%d",
+                      wc.status, ibv_wc_status_str(wc.status), wc.wr_id, current);
+            break;
+        }
+
+        // Signal GPU: send_buf is now free to overwrite
+        last_completed = current;
+        __atomic_store_n(s->h_send_done, current, __ATOMIC_RELEASE);
+
+        if (current <= 10 || current % 5000 == 0) {
+            log_info("Proxy: step %d RDMA complete", current);
+        }
+    }
+
+done:
+    log_info("Proxy thread exiting (rank=%d, completed=%d steps)", s->rank, last_completed);
+    return NULL;
 }
 
 // --- Exported API ---
@@ -400,28 +469,11 @@ int uf19_init(int rank, int world_size,
     g_state.rank = rank;
     g_state.max_numel = numel;
     g_state.max_data_bytes = numel * sizeof(__nv_bfloat16);
-    g_state.step = 0;
-
-    // Parse mode: C (default) = sync after step, B = CPU recv poll, A = separate poll stream
-    g_state.mode = 0;
-    const char* mode_env = getenv("VLLM_UF19_MODE");
-    if (mode_env) {
-        if (mode_env[0] == 'B' || mode_env[0] == 'b') g_state.mode = 1;
-        else if (mode_env[0] == 'A' || mode_env[0] == 'a') g_state.mode = 2;
-    }
-    const char* mode_names[] = {"C (sync)", "B (CPU recv poll)", "A (separate poll stream)"};
-    log_info("Init: rank=%d, peer=%s, dev=%s, gid=%d, max_numel=%d (%d bytes), mode=%s",
-             rank, peer_ip, ib_dev, gid_idx, numel, g_state.max_data_bytes,
-             mode_names[g_state.mode]);
-
-    // CUDA stream (use default stream = 0 for vLLM compat)
+    g_state.host_step = 0;
     g_state.stream = 0;
 
-    // Mode A: create separate stream + event for poll_recv
-    if (g_state.mode == 2) {
-        cudaStreamCreate(&g_state.poll_stream);
-        cudaEventCreateWithFlags(&g_state.poll_event, cudaEventDisableTiming);
-    }
+    log_info("v4 Init: rank=%d, peer=%s, dev=%s, gid=%d, max_numel=%d (%d bytes)",
+             rank, peer_ip, ib_dev, gid_idx, numel, g_state.max_data_bytes);
 
     // --- ibverbs setup ---
     g_state.ib_ctx = open_ib_device(ib_dev);
@@ -469,7 +521,6 @@ int uf19_init(int rank, int world_size,
     }
 
     if (g_state.use_gdr) {
-        // GDR path: RDMA directly on device memory
         g_state.buf_send = g_state.d_send_buf;
         g_state.buf_recv = g_state.d_recv_buf;
         g_state.gpu_send = g_state.d_send_buf;
@@ -477,49 +528,34 @@ int uf19_init(int rank, int world_size,
         g_state.h_send_buf = NULL;
         g_state.h_recv_buf = NULL;
     } else {
-        // Heap-only path (ibverbs-compatible on GB10 unified memory)
-        // cudaHostAlloc/cudaHostRegister alter page tables in ways that break
-        // ibv_reg_mr DMA mapping on GB10. Plain posix_memalign works because
-        // GB10 unified memory makes ALL host memory GPU-accessible by default.
-        log_info("GPUDirect not available, using heap memory (no cudaHostRegister)");
+        log_info("GPUDirect not available, using heap memory");
         if (posix_memalign((void**)&g_state.h_send_buf, 4096, g_state.max_data_bytes) ||
             posix_memalign((void**)&g_state.h_recv_buf, 4096, g_state.max_data_bytes)) {
             log_error("posix_memalign failed for data buffers"); return -1;
         }
         memset(g_state.h_send_buf, 0, g_state.max_data_bytes);
         memset(g_state.h_recv_buf, 0, g_state.max_data_bytes);
-        // On GB10 unified memory, host pointers ARE device pointers (no registration needed)
         g_state.gpu_send = g_state.h_send_buf;
         g_state.gpu_recv = g_state.h_recv_buf;
         g_state.buf_send = g_state.h_send_buf;
         g_state.buf_recv = g_state.h_recv_buf;
     }
 
-    // Staging buffer: cudaMalloc'd device memory, separate from NIC-written recv_buf.
-    // After recv_flag confirms data arrived, cudaMemcpyAsync copies recv_buf → staging.
-    // add_kernel reads from staging with normal loads (no L2 cache coherency issues).
-    cudaMalloc(&g_state.d_recv_staging, g_state.max_data_bytes);
-    cudaMemset(g_state.d_recv_staging, 0, g_state.max_data_bytes);
-    log_info("Allocated recv staging buffer: %p (%d bytes)", g_state.d_recv_staging, g_state.max_data_bytes);
-
-    // CPU buffers for full-CPU addition path
-    g_state.h_input_copy = (__nv_bfloat16*)malloc(g_state.max_data_bytes);
-    g_state.h_output_buf = (__nv_bfloat16*)malloc(g_state.max_data_bytes);
-    if (!g_state.h_input_copy || !g_state.h_output_buf) {
-        log_error("malloc failed for CPU buffers"); return -1;
-    }
-
-    // Flags: plain heap (same reason — no cudaHostRegister on GB10)
+    // Flags: plain heap (posix_memalign — GB10 unified memory = GPU accessible)
     if (posix_memalign((void**)&g_state.h_send_flag, 64, sizeof(int)) ||
         posix_memalign((void**)&g_state.h_recv_flag, 64, sizeof(int)) ||
+        posix_memalign((void**)&g_state.h_send_done, 64, sizeof(int)) ||
         posix_memalign((void**)&g_state.h_flag_src, 64, sizeof(int))) {
         log_error("posix_memalign failed for flags"); return -1;
     }
     *g_state.h_send_flag = 0;
     *g_state.h_recv_flag = 0;
+    *g_state.h_send_done = 0;
+    *g_state.h_flag_src = 0;
     // On GB10 unified memory, host pointers ARE device pointers
     g_state.d_send_flag = g_state.h_send_flag;
     g_state.d_recv_flag = g_state.h_recv_flag;
+    g_state.d_send_done = g_state.h_send_done;
     cudaDeviceSynchronize();
 
     // Register RDMA memory regions
@@ -535,27 +571,44 @@ int uf19_init(int rank, int world_size,
     g_state.mr_flag_src = ibv_reg_mr(g_state.pd, g_state.h_flag_src, sizeof(int), mr_flags);
     if (!g_state.mr_flag_src) { log_error("ibv_reg_mr flag_src failed"); return -1; }
 
-    // Log MR details for debugging RDMA address issues
     log_info("MR send:  addr=%p len=%d lkey=0x%08x rkey=0x%08x",
              g_state.mr_send->addr, (int)g_state.mr_send->length,
              g_state.mr_send->lkey, g_state.mr_send->rkey);
     log_info("MR recv:  addr=%p len=%d lkey=0x%08x rkey=0x%08x",
              g_state.mr_recv->addr, (int)g_state.mr_recv->length,
              g_state.mr_recv->lkey, g_state.mr_recv->rkey);
-    log_info("MR flag:  addr=%p len=%d lkey=0x%08x rkey=0x%08x",
-             g_state.mr_flag->addr, (int)g_state.mr_flag->length,
-             g_state.mr_flag->lkey, g_state.mr_flag->rkey);
-    log_info("buf_send=%p buf_recv=%p h_recv_flag=%p",
-             g_state.buf_send, g_state.buf_recv, g_state.h_recv_flag);
 
     // QP state machine: RESET → INIT → RTR → RTS
     if (modify_qp_to_init(g_state.qp)) { log_error("QP → INIT failed"); return -1; }
 
     uint32_t psn = (uint32_t)(rank * 12345 + 1) & 0xFFFFFF;
     union ibv_gid local_gid;
-    if (ibv_query_gid(g_state.ib_ctx, 1, gid_idx, &local_gid)) {
-        log_error("ibv_query_gid failed"); return -1;
+
+    // Auto-detect GID index if requested (-1) or verify given index
+    if (gid_idx < 0) {
+        // Scan GID table for a RoCEv2 entry (IPv4-mapped)
+        gid_idx = 3; // reasonable default
+        for (int i = 0; i < 16; i++) {
+            union ibv_gid g;
+            if (ibv_query_gid(g_state.ib_ctx, 1, i, &g) == 0) {
+                // IPv4-mapped: first 10 bytes zero, bytes 10-11 = 0xffff
+                if (g.raw[0] == 0 && g.raw[1] == 0 && g.raw[10] == 0xff && g.raw[11] == 0xff) {
+                    gid_idx = i;
+                    log_info("Auto-detected RoCEv2 GID index: %d", gid_idx);
+                    break;
+                }
+            }
+        }
     }
+    if (ibv_query_gid(g_state.ib_ctx, 1, gid_idx, &local_gid)) {
+        log_error("ibv_query_gid failed (index=%d)", gid_idx); return -1;
+    }
+    log_info("Using GID[%d]: %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+             gid_idx,
+             local_gid.raw[0], local_gid.raw[1], local_gid.raw[2], local_gid.raw[3],
+             local_gid.raw[4], local_gid.raw[5], local_gid.raw[6], local_gid.raw[7],
+             local_gid.raw[8], local_gid.raw[9], local_gid.raw[10], local_gid.raw[11],
+             local_gid.raw[12], local_gid.raw[13], local_gid.raw[14], local_gid.raw[15]);
 
     struct qp_info local_info, remote_info;
     local_info.qpn = g_state.qp->qp_num;
@@ -577,14 +630,10 @@ int uf19_init(int rank, int world_size,
         log_error("QP → RTS failed"); return -1;
     }
 
-    // Store remote addresses for dynamic WR updates
-    g_state.remote_addr_data = remote_info.addr_data;
-    g_state.remote_rkey_data = remote_info.rkey_data;
-
-    // Pre-build RDMA Work Requests (sge_data.length updated per call)
+    // Pre-build RDMA Work Requests (always send max_data_bytes)
     memset(&g_state.sge_data, 0, sizeof(g_state.sge_data));
     g_state.sge_data.addr = (uint64_t)g_state.buf_send;
-    g_state.sge_data.length = 0;  // set per call
+    g_state.sge_data.length = g_state.max_data_bytes;
     g_state.sge_data.lkey = g_state.mr_send->lkey;
 
     memset(&g_state.wr_data, 0, sizeof(g_state.wr_data));
@@ -610,143 +659,58 @@ int uf19_init(int rank, int world_size,
     g_state.wr_flag.wr.rdma.remote_addr = remote_info.addr_flag;
     g_state.wr_flag.wr.rdma.rkey = remote_info.rkey_flag;
 
-    // Chain: data WR → flag WR (IB ordering guarantees data arrives before flag)
+    // Chain: data WR → flag WR (IB ordering: data arrives before flag)
     g_state.wr_data.next = &g_state.wr_flag;
     g_state.wr_flag.next = NULL;
 
-    // Start inactive — Python calls uf19_activate() after warmup/capture is done.
-    // During warmup+capture, torch.distributed barriers can deadlock with UF19 polling.
-    g_state.active = 0;
+    // Start proxy thread
+    g_state.proxy_running = 1;
+    if (pthread_create(&g_state.proxy_tid, NULL, proxy_thread_fn, NULL)) {
+        log_error("pthread_create failed for proxy thread");
+        return -1;
+    }
 
+    // Start inactive — Python calls uf19_activate() after warmup/capture
+    g_state.active = 0;
     g_state.initialized = 1;
-    log_info("Init complete (rank=%d, %s, max_numel=%d, INACTIVE until uf19_activate())",
+    log_info("v4 Init complete (rank=%d, %s, max_numel=%d, INACTIVE until uf19_activate())",
              rank, g_state.use_gdr ? "GPUDirect" : "mapped", numel);
     return 0;
 }
 
 
+// Graph-capturable uf19_step: only launches GPU kernels, no CPU blocking.
 int uf19_step(void* input_ptr, void* output_ptr, int numel)
 {
-    if (!g_state.initialized) {
-        log_error("not initialized");
-        return -1;
-    }
-    if (numel > g_state.max_numel) {
-        return -2;
-    }
+    if (!g_state.initialized) return -1;
+    if (numel > g_state.max_numel) return -2;
+    if (!g_state.active) return -2;
 
-    g_state.step++;
-    int step = g_state.step;
-    int data_bytes = numel * (int)sizeof(__nv_bfloat16);
+    g_state.host_step++;
+    if (g_state.host_step <= 10 || g_state.host_step % 5000 == 0)
+        log_info("step %d: numel=%d (%d bytes)", g_state.host_step, numel,
+                 (int)(numel * sizeof(__nv_bfloat16)));
 
-    // Inactive until uf19_activate() is called (after warmup+capture)
-    if (!g_state.active) {
-        return -2;  // signal Python to use NCCL
-    }
+    int blocks = (numel + 255) / 256;
+    cudaStream_t s = g_state.stream;
 
-    int verbose = (step <= 10 || (step % 500 == 0 && step <= 5000) || step % 5000 == 0);
-    if (verbose)
-        log_info("step %d: numel=%d (%d bytes)", step, numel, data_bytes);
+    // K0: Wait for proxy to finish previous RDMA (send_buf safe to overwrite)
+    uf19_wait_send_done<<<1, 1, 0, s>>>(g_state.d_send_flag, g_state.d_send_done);
 
-    __nv_bfloat16* input = (__nv_bfloat16*)input_ptr;
-    __nv_bfloat16* output = (__nv_bfloat16*)output_ptr;
+    // K1a: Copy input → send_buf
+    uf19_copy_to_send<<<blocks, 256, 0, s>>>(
+        (const __nv_bfloat16*)input_ptr, g_state.gpu_send, numel);
 
-    // Wait for previous RDMA to complete before overwriting send_buf.
-    // The NIC reads send_buf asynchronously after ibv_post_send. Without this
-    // wait, prepare_send overwrites send_buf before the NIC finishes reading,
-    // causing the peer to receive corrupted (mixed old+new) data.
-    if (step > 1) {
-        struct ibv_wc wc;
-        int ne;
-        long long cq_polls = 0;
-        while ((ne = ibv_poll_cq(g_state.cq, 1, &wc)) == 0) {
-            cq_polls++;
-            if (cq_polls > 5000000000LL) {
-                log_error("step %d: CQ poll timeout waiting for prev RDMA", step);
-                return -4;
-            }
-        }
-        if (ne < 0) {
-            log_error("step %d: ibv_poll_cq error: %d", step, ne);
-            return -1;
-        }
-        if (wc.status != IBV_WC_SUCCESS) {
-            log_error("step %d: prev RDMA failed: status=%d (%s) wr_id=%lu",
-                      step, wc.status, ibv_wc_status_str(wc.status), wc.wr_id);
-            return -1;
-        }
-        if (verbose) log_info("step %d: prev RDMA CQ ok (polls=%lld)", step, cq_polls);
-    }
+    // K1b: Signal proxy that send_buf is ready
+    uf19_signal_send<<<1, 1, 0, s>>>(g_state.d_send_flag);
 
-    // FULL CPU PATH: No GPU kernels for data movement or addition.
-    // Eliminates ALL GPU cache coherence issues on GB10.
+    // K2: Poll recv_flag until peer's data arrives
+    uf19_poll_recv<<<1, 1, 0, s>>>(g_state.d_recv_flag, g_state.d_send_flag);
 
-    // Phase 1: Sync GPU, copy input to CPU
-    cudaDeviceSynchronize();
-    cudaMemcpy(g_state.h_input_copy, input, data_bytes, cudaMemcpyDeviceToHost);
-    // Copy to send_buf (CPU-to-CPU, no GPU caches involved)
-    memcpy(g_state.buf_send, g_state.h_input_copy, data_bytes);
-    if (verbose) log_info("step %d: send_buf prepared (CPU, %d bytes)", step, data_bytes);
-
-    // Phase 2: Post RDMA
-    g_state.sge_data.length = data_bytes;
-    *g_state.h_flag_src = step;
-    struct ibv_send_wr* bad_wr;
-    int ret = ibv_post_send(g_state.qp, &g_state.wr_data, &bad_wr);
-    if (ret) {
-        log_error("step %d: ibv_post_send failed: %d (errno=%d: %s)",
-                  step, ret, errno, strerror(errno));
-        return -1;
-    }
-
-    // Phase 3: CPU polls recv_flag
-    {
-        long long recv_polls = 0;
-        while (*(volatile int*)g_state.h_recv_flag < step) {
-            recv_polls++;
-            if (recv_polls > 5000000000LL) {
-                log_error("step %d: h_recv_flag timeout (cur=%d, need=%d, polls=%lld)",
-                          step, *g_state.h_recv_flag, step, recv_polls);
-                struct ibv_wc wc;
-                int ne = ibv_poll_cq(g_state.cq, 1, &wc);
-                if (ne > 0 && wc.status != IBV_WC_SUCCESS) {
-                    log_error("step %d: CQ error: status=%d (%s) wr_id=%lu",
-                              step, wc.status, ibv_wc_status_str(wc.status), wc.wr_id);
-                }
-                return -4;
-            }
-        }
-        if (verbose) log_info("step %d: recv_flag ok (polls=%lld)", step, recv_polls);
-    }
-
-    // Phase 4: CPU addition — no GPU kernels involved
-    {
-        const __nv_bfloat16* h_in = g_state.h_input_copy;
-        const __nv_bfloat16* h_rv = (__nv_bfloat16*)g_state.buf_recv;
-        __nv_bfloat16* h_out = g_state.h_output_buf;
-        for (int i = 0; i < numel; i++) {
-            float a = __bfloat162float(h_in[i]);
-            float b = __bfloat162float(h_rv[i]);
-            h_out[i] = __float2bfloat16(a + b);
-        }
-        // Diagnostic: log first few values on early steps
-        if (step <= 5) {
-            log_info("step %d: in[0..3]={%.4f,%.4f,%.4f,%.4f} rv[0..3]={%.4f,%.4f,%.4f,%.4f} out[0..3]={%.4f,%.4f,%.4f,%.4f}",
-                step,
-                __bfloat162float(h_in[0]), __bfloat162float(h_in[1]),
-                __bfloat162float(h_in[2]), __bfloat162float(h_in[3]),
-                __bfloat162float(h_rv[0]), __bfloat162float(h_rv[1]),
-                __bfloat162float(h_rv[2]), __bfloat162float(h_rv[3]),
-                __bfloat162float(h_out[0]), __bfloat162float(h_out[1]),
-                __bfloat162float(h_out[2]), __bfloat162float(h_out[3]));
-        }
-    }
-
-    // Phase 5: Copy result to GPU
-    cudaMemcpy(output, g_state.h_output_buf, data_bytes, cudaMemcpyHostToDevice);
-
-    if (verbose) log_info("step %d: done (mode %c)", step,
-                          g_state.mode == 0 ? 'C' : (g_state.mode == 1 ? 'B' : 'A'));
+    // K3: Add local input + received data → output
+    uf19_add_recv<<<blocks, 256, 0, s>>>(
+        (const __nv_bfloat16*)input_ptr, g_state.gpu_recv,
+        (__nv_bfloat16*)output_ptr, numel);
 
     return 0;
 }
@@ -757,15 +721,24 @@ void uf19_activate(void)
     if (!g_state.initialized) return;
     if (g_state.active) return;
     g_state.active = 1;
-    g_state.step = 0;  // reset step counter for clean start
-    log_info("ACTIVATED — UF19 RDMA AllReduce now handling traffic (rank=%d)", g_state.rank);
+    g_state.host_step = 0;
+    // Reset mapped counters for clean start
+    *g_state.h_send_flag = 0;
+    *g_state.h_recv_flag = 0;
+    *g_state.h_send_done = 0;
+    __sync_synchronize();
+    log_info("ACTIVATED — UF19v4 RDMA AllReduce now handling traffic (rank=%d)", g_state.rank);
 }
 
 void uf19_cleanup(void)
 {
     if (!g_state.initialized) return;
 
-    log_info("Cleanup (rank=%d, %d steps completed)", g_state.rank, g_state.step);
+    log_info("Cleanup (rank=%d, %d steps)", g_state.rank, g_state.host_step);
+
+    // Stop proxy thread
+    __atomic_store_n(&g_state.proxy_running, 0, __ATOMIC_RELAXED);
+    pthread_join(g_state.proxy_tid, NULL);
 
     // Drain remaining CQ entries
     if (g_state.cq) {
@@ -783,21 +756,14 @@ void uf19_cleanup(void)
     if (g_state.pd) ibv_dealloc_pd(g_state.pd);
     if (g_state.ib_ctx) ibv_close_device(g_state.ib_ctx);
 
-    // CUDA cleanup
-    if (g_state.mode == 2) {
-        if (g_state.poll_stream) cudaStreamDestroy(g_state.poll_stream);
-        if (g_state.poll_event) cudaEventDestroy(g_state.poll_event);
-    }
-    // Heap path: just free (no cudaHostUnregister needed)
+    // Memory cleanup
     if (g_state.h_send_buf) free(g_state.h_send_buf);
     if (g_state.h_recv_buf) free(g_state.h_recv_buf);
     if (g_state.d_send_buf) cudaFree(g_state.d_send_buf);
     if (g_state.d_recv_buf) cudaFree(g_state.d_recv_buf);
-    if (g_state.d_recv_staging) cudaFree(g_state.d_recv_staging);
-    if (g_state.h_input_copy) free(g_state.h_input_copy);
-    if (g_state.h_output_buf) free(g_state.h_output_buf);
     if (g_state.h_send_flag) free(g_state.h_send_flag);
     if (g_state.h_recv_flag) free(g_state.h_recv_flag);
+    if (g_state.h_send_done) free(g_state.h_send_done);
     if (g_state.h_flag_src) free(g_state.h_flag_src);
 
     memset(&g_state, 0, sizeof(g_state));

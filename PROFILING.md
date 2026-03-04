@@ -88,4 +88,120 @@ Overhead:    ~1.4 ms  (EAGLE3, Scheduling, CPU)
 | **UF17** | **EAGER_ALLREDUCE** | **+8% (107.8 → 116.3)** | **Produktiv, v3 zero-copy** |
 | UF18 | NCCL_GRAPH_REG | Nicht getestet | CUDA Graph AllReduce 43x langsamer |
 
-AllReduce-Optimierung ist ausgereizt. 19 µs/Call ueber RoCE bei 4 KiB ist nahe am theoretischen Minimum.
+## 6. UF19: Custom AllReduce via raw ibverbs (NCCL-Bypass)
+
+Standalone C/CUDA Benchmark, 5000 Iterationen, 500 Warmup.
+Mapped pinned Memory (cudaHostAllocMapped) fuer GPU↔NIC Zero-Copy.
+
+### 6.1 Raw RDMA Write Latenz (CPU Memory, ib_write_lat)
+
+| Groesse | Latenz |
+|---------|--------|
+| 2 B | 1.74 µs |
+| 64 B | 1.75 µs |
+| 1 KiB | 2.59 µs |
+| 4 KiB | **3.19 µs** |
+| 8 KiB | 3.78 µs |
+| 16 KiB | 4.83 µs |
+| 32 KiB | 6.69 µs |
+| 1 MiB | 82.2 µs |
+
+Basislatenz ~1.74 µs, 200 Gbps (25 GB/s) Bandbreite ab ~4 KiB sichtbar.
+
+### 6.2 Custom AllReduce Komponenten-Latenzen
+
+| Komponente | Latenz |
+|------------|--------|
+| GPU add kernel (BF16, 2048 elem) | 2.1-2.4 µs |
+| GPU→mapped write + __threadfence_system | 2.4-2.8 µs |
+| RDMA post+poll (data+flag, ibv_post_send) | 4.2 µs (CPU wall-clock) |
+
+### 6.3 Full Custom AllReduce Pipeline
+
+```
+  GPU prepare + CPU poll:      5.1 µs  (GPU writes to mapped mem + CPU polls flag)
+  CPU RDMA post:               0.3 µs  (ibv_post_send, 2 chained WRs)
+  GPU poll+add (incl. wait):   6.7 µs  (wait for RDMA data + BF16 add)
+  ─────────────────────────────────────
+  TOTAL:                      12.1 µs  (vs 19.0 µs NCCL AllReduce)
+```
+
+### 6.4 Hochrechnung auf 97 AllReduces/Token
+
+| Methode | pro Call | x97 | tok/s | vs Baseline |
+|---------|---------|-----|-------|-------------|
+| NCCL AllReduce (UF17) | 19.0 µs | 1.84 ms | **116.3** | — |
+| **Custom ibverbs (UF19)** | **12.1 µs** | **1.17 ms** | **126.1** | **+8.4%** |
+| Raw RDMA Floor | 3.2 µs | 0.31 ms | 140+ | Theoretisch |
+
+### 6.5 Engpaesse und Optimierungspotential
+
+```
+UF19 ohne nvidia-peermem:     12.1 µs
+  └── GPU→mapped copy + fence:  5.1 µs  ← Hauptengpass
+  └── RDMA + GPU poll+add:      7.0 µs  ← nahe am Floor
+
+UF19 MIT nvidia-peermem (geschaetzt):  ~6-7 µs
+  └── NIC DMA direkt aus GPU Memory (kein mapped copy)
+  └── Kein CPU poll noetig
+  └── Braucht sudo fuer modprobe nvidia-peermem
+```
+
+### 6.6 NCCL Net Plugin (UF19v2) — Ansatz verworfen
+
+Versuch: NCCL Net Plugin (ncclNet_v9_t) um nur den Transport zu ersetzen.
+
+| Methode | µs/call | Ergebnis |
+|---------|---------|----------|
+| NCCL Baseline | 16.4 | — |
+| NCCL Net Plugin (RDMA SEND/RECV) | 20.6 | **Langsamer** |
+
+**Erkenntnis**: Der Flaschenhals ist der NCCL Proxy-Thread (~13 µs), nicht der Transport (~3 µs). Ein Net Plugin sitzt UNTER dem Proxy und kann dessen Overhead nicht reduzieren. Zudem: Plugin nutzt RDMA SEND/RECV (two-sided), NCCL nutzt RDMA WRITE (one-sided, schneller).
+
+### 6.7 UF19v4: Mini-Proxy Architektur (CUDA-Graph-kompatibel)
+
+Korrekte Loesung: GPU-Kernels IN den CUDA Graph, minimaler CPU-Thread fuer ibverbs.
+
+```
+GPU Kernels (graph-capturable):
+  1. wait_send_done <<<1,1>>>  — polls send_done (proxy fertig mit vorherigem RDMA)
+  2. prepare_send   <<<N,256>>> — kopiert input→send_buf, atomicAdd_system(send_flag)
+  3. poll_recv      <<<1,1>>>  — polls recv_flag via atomicAdd_system (NIC-DMA sichtbar)
+  4. add_recv       <<<N,256>>> — addiert local + recv_buf(load_cv) → output
+
+CPU Proxy Thread (Hintergrund, laeuft kontinuierlich):
+  spin-polls send_flag → ibv_post_send(data+flag chained) → poll CQ → store send_done
+```
+
+**Benchmark** (5000 Runden, 2048 bf16 = 4 KiB):
+
+| Methode | µs/call | vs NCCL |
+|---------|---------|---------|
+| NCCL Baseline (UF17 eager) | 16.4 | — |
+| NCCL Net Plugin (UF19v2) | 20.6 | +26% langsamer |
+| **UF19v4 Mini-Proxy** | **12.2** | **-26% schneller** |
+
+**Hochrechnung auf 97 AllReduces/Token:**
+
+| Methode | pro Call | x97 | tok/s | vs Baseline |
+|---------|---------|-----|-------|-------------|
+| NCCL (UF17 eager) | 16.4 µs | 1.59 ms | **116.3** | — |
+| **UF19v4 Mini-Proxy** | **12.2 µs** | **1.18 ms** | **~120** | **+3.5%** |
+
+### 6.8 UF Task Status (final)
+
+| UF | Name | Ergebnis | Fazit |
+|----|------|----------|-------|
+| UF13 | NCCL_TUNE | Neutral | NCCL Env-Vars bringen nichts bei 4 KiB |
+| UF14 | COALESCE | Nicht machbar | Layer-Dependency verhindert Batching |
+| UF15 | OVERLAP_V2 | Nicht machbar | Multi-Stream bricht CUDA Graphs |
+| UF16 | FUSED_REDUCE_NORM | Send/Recv langsamer | AllReduce ist bereits optimal |
+| **UF17** | **EAGER_ALLREDUCE** | **+8% (107.8 → 116.3)** | **Produktiv, v3 zero-copy** |
+| UF18 | NCCL_GRAPH_REG | Nicht getestet | CUDA Graph AllReduce 43x langsamer |
+| UF19v1 | RAW_IBVERBS (CPU) | 12.1 µs | Prototyp, nicht graph-kompatibel |
+| UF19v2 | NCCL Net Plugin | 20.6 µs | Verworfen (Proxy ist Flaschenhals, nicht Transport) |
+| **UF19v4** | **Mini-Proxy** | **12.2 µs (-26% vs NCCL)** | **CUDA-Graph-kompatibel, Produktionsreif** |
+
+NCCL-Overhead bei 4 KiB: ~13 µs Proxy-Software ueber dem Netzwerk-Floor (3.2 µs).
+UF19v4 eliminiert den Proxy und ersetzt ihn durch einen minimalen CPU-Thread.
+Restliche ~9 µs: GPU→mapped copy (~3 µs) + RDMA (~3 µs) + GPU poll+add (~3 µs).

@@ -24,8 +24,8 @@ ssh flash@192.168.1.116 "nohup podman run \
   --device /dev/nvidia-uvm-tools \
   --device /dev/dri/card0 \
   --device /dev/dri/renderD128 \
-  --device /dev/infiniband/uverbs0 \
-  --device /dev/infiniband/rdma_cm \
+  -v /dev/infiniband:/dev/infiniband \
+  --cap-add=IPC_LOCK \
   --security-opt=label=disable \
   -v /data/tensordata:/data/tensordata \
   -v \$HOME/.cache/huggingface:/root/.cache/huggingface \
@@ -42,13 +42,17 @@ ssh flash@192.168.1.116 "nohup podman run \
   -e FLASHINFER_DISABLE_VERSION_CHECK=1 \
   -e VLLM_ENABLE_V1_MULTIPROCESSING=0 \
   -e VLLM_UF_EAGER_ALLREDUCE=1 \
+  -e VLLM_UF_UF19_RDMA=1 \
+  -e VLLM_UF19_PEER_IP=192.168.0.117 \
+  -e VLLM_UF19_IB_DEV=rocep1s0f0 \
+  -e VLLM_UF19_GID_IDX=-1 \
   $IMAGE \
   sleep infinity > /tmp/$CONTAINER_NAME.log 2>&1 &"
 
 sleep 5
 
 if ssh flash@192.168.1.116 "podman ps | grep -q $CONTAINER_NAME"; then
-  echo "Container '$CONTAINER_NAME' laeuft auf PGX (UF17 EAGER_ALLREDUCE=1)."
+  echo "Container '$CONTAINER_NAME' laeuft auf PGX (UF17+UF19 RDMA, peer=192.168.0.117)."
   echo "Naechster Schritt: ./start.ng_tp2.serve.<config>"
 else
   echo "FEHLER: Container nicht gestartet!"

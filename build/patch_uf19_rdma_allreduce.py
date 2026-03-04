@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """
-Patch UF19: Replace NCCL AllReduce with raw ibverbs RDMA.
+Patch UF19v4: CUDA-Graph-Compatible AllReduce via ibverbs RDMA.
 
 Modifies the UF17v3 all_reduce_with_output() function in parallel_state.py
 to dispatch through UF19Communicator when VLLM_UF_UF19_RDMA=1.
+
+v4 Architecture:
+  GPU kernels (graph-capturable): wait_send_done → prepare_send → poll_recv → add_recv
+  CPU proxy thread (background): polls send_flag → RDMA WRITE → CQ → send_done
 
 Requires: UF17v3 patch already applied (all_reduce_with_output must exist).
 Requires: libuf19_rdma.so compiled and available at UF19_LIB_PATH.
@@ -13,7 +17,7 @@ Env vars at runtime:
   VLLM_UF_UF19_RDMA=1        (this patch)
   VLLM_UF19_PEER_IP=192.168.0.116   (peer's RDMA IP)
   VLLM_UF19_IB_DEV=rocep1s0f0       (RDMA device, default: rocep1s0f0)
-  VLLM_UF19_GID_IDX=3               (GID index, default: 3)
+  VLLM_UF19_GID_IDX=-1              (GID index, -1=auto-detect RoCEv2)
   UF19_LIB_PATH=/opt/vllm/libuf19_rdma.so  (default)
 """
 
@@ -72,7 +76,7 @@ else:
                 if not peer_ip:
                     raise ValueError("VLLM_UF19_PEER_IP not set")
                 ib_dev = _os.environ.get("VLLM_UF19_IB_DEV", "rocep1s0f0")
-                gid_idx = int(_os.environ.get("VLLM_UF19_GID_IDX", "3"))
+                gid_idx = int(_os.environ.get("VLLM_UF19_GID_IDX", "-1"))
                 group._uf19_comm = UF19Communicator(
                     rank, group.world_size, peer_ip, ib_dev,
                     gid_idx, input_.numel())
