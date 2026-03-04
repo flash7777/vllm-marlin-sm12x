@@ -76,7 +76,7 @@
 | 8K | 20.9 | 32.3 | 32.2 |
 | 16K | 13.1 | 21.1 | 21.0 |
 
-## Qwen3-Coder-Next INT4 AutoRound (vanilla, eager mode)
+## Qwen3-Coder-Next INT4 AutoRound (vanilla)
 
 **WORKS** at TP=2 with Marlin N-padding patch (`build/patch_marlin_padding.py`).
 
@@ -84,21 +84,46 @@ Qwen3-Next's `linear_attn.in_proj_ba` layer has `output_size_per_partition=32` a
 The padding patch zero-pads weights to 64 before `gptq_marlin_repack`, runs the kernel with
 padded N, then slices output back to actual N. 66 layers are padded per rank.
 
-**Note**: Requires `--enforce-eager` due to torch.compile AssertionError with Qwen3-Next's
-hybrid Mamba+Attention architecture (AOT autograd output spec mismatch). This is a separate
-issue unrelated to Marlin padding.
-
-### Performance (n=5, enforce-eager)
+### Performance (n=5, torch.compile + CUDA Graphs)
 
 | Prompt | tok/s |
 |--------|-------|
-| short | 17.4 |
-| medium | 25.6 |
-| long | **26.3** |
-| Math | 47/50 (**94%**) |
+| short | 37.6 |
+| medium | 86.2 |
+| long | **87.7** |
+| Math | 46/50 (**92%**) |
 
-Performance is limited by eager mode (no CUDA graphs). With torch.compile support, expect
-~4x improvement (similar to other models' eager vs compiled difference).
+### vs enforce-eager
+
+| Mode | long tok/s | Math |
+|------|-----------|------|
+| enforce-eager | 26.3 | 94% |
+| **torch.compile** | **87.7** | 92% |
+
+**3.3× faster** with torch.compile. Required two patches to fix `torch.Size` crossing
+AOT autograd split boundaries:
+
+1. `build/patch_qwen3next_compile.py` — Fix `z_shape_og = z.shape` in GatedDeltaNet
+   (crosses `vllm::gdn_attention_core` split)
+2. `build/patch_qwen3next_compile_v2.py` — Fix `orig_shape = hidden_states.shape` in
+   SparseMoeBlock (crosses `vllm::all_reduce_with_output` split)
+
+### EAGLE3 NST=1 (Aurora-Spec drafter)
+
+| Prompt | tok/s |
+|--------|-------|
+| short | 34.5 |
+| medium | 59.8 |
+| long | **78.7** |
+| Math | 46/50 (**92%**) |
+
+EAGLE3 is **slower** than vanilla compiled (78.7 vs 87.7 tok/s). The Aurora drafter
+(`togethercomputer/Aurora-Spec-Qwen3-Coder-Next-FP8`, 0.5B, 1 GB) was trained for the
+FP8 model, not INT4 AutoRound. On DGX (273 GB/s, bandwidth-limited), the draft overhead
+exceeds the acceptance rate benefit. Required `patch_qwen3next_eagle3.py` to add
+`SupportsEagle3` interface to Qwen3NextForCausalLM.
+
+**Note**: No MTP available for Qwen3-Next (`num_nextn_predict_layers: None`).
 
 ## Comparison: vllm-ng (0.15) vs vllm-ng16 (0.16)
 
@@ -181,8 +206,11 @@ This is mathematically correct: zero-padded weight columns produce zero output c
 that are sliced away. The patch is applied at model loading time, so inference overhead
 is just the extra 32 output columns per padded layer (negligible).
 
-### Remaining Issue: torch.compile
+### torch.compile Fix (SOLVED)
 
-Qwen3-Next crashes during `torch.compile` graph capture (AssertionError in AOT autograd
-output spec mismatch — hybrid Mamba+Attention architecture). Requires `--enforce-eager`
-as workaround, which significantly reduces throughput (~4x slower than compiled).
+Qwen3-Next crashed during `torch.compile` graph capture due to `torch.Size` objects crossing
+AOT autograd split boundaries. Fixed by two patches that replace `.shape` with `.size()` calls:
+- `patch_qwen3next_compile.py`: GatedDeltaNet `z_shape_og` → static dims
+- `patch_qwen3next_compile_v2.py`: MoE `orig_shape` → `num_tokens, hidden_dim`
+
+Result: **87.7 tok/s** compiled vs 26.3 tok/s eager (**3.3× improvement**).

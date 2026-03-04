@@ -1,8 +1,9 @@
 #!/bin/bash
 # TP=2 vllm-ng16: Universal serve script
-# Usage: ./start.ng16_tp2.serve <model> [eagle3]
-#   model: qwen3coder | glm47 | qwen3next
+# Usage: ./start.ng16_tp2.serve <model> [eagle3|mtp]
+#   model: qwen3coder | glm47 | qwen3next | step3p5
 #   eagle3: optional, adds EAGLE3 NST=1 (only for qwen3coder)
+#   mtp: optional, adds MTP speculative decoding (glm47, step3p5)
 
 set -euo pipefail
 
@@ -32,19 +33,34 @@ case "$MODEL_KEY" in
     MODEL_NAME="qwen3-coder-next"
     EAGLE3_PATH=""
     ;;
+  step3p5)
+    MODEL_PATH="/data/tensordata/Step-3.5-Flash-int4-AutoRound"
+    MODEL_NAME="step3p5-flash"
+    EAGLE3_PATH=""
+    ;;
   *)
-    echo "Usage: $0 <qwen3coder|glm47|qwen3next> [eagle3]"
+    echo "Usage: $0 <qwen3coder|glm47|qwen3next|step3p5> [eagle3|mtp]"
     exit 1
     ;;
 esac
 
 # Build extra args
 EXTRA_ARGS=""
+ENFORCE_EAGER="${ENFORCE_EAGER:-0}"
+
 if [ "$SPEC" = "eagle3" ] && [ -n "$EAGLE3_PATH" ]; then
   EXTRA_ARGS="--speculative-model $EAGLE3_PATH --num-speculative-tokens 1"
   echo "=== vllm-ng16 TP=2: $MODEL_NAME + EAGLE3 NST=1 ==="
+elif [ "$SPEC" = "mtp" ]; then
+  EXTRA_ARGS="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":1}"
+  echo "=== vllm-ng16 TP=2: $MODEL_NAME + MTP NST=1 ==="
 else
   echo "=== vllm-ng16 TP=2: $MODEL_NAME (vanilla) ==="
+fi
+
+if [ "$ENFORCE_EAGER" = "1" ]; then
+  EXTRA_ARGS="$EXTRA_ARGS --enforce-eager"
+  echo "(enforce-eager mode)"
 fi
 echo "Modell: $MODEL_PATH"
 echo ""

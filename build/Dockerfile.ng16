@@ -107,6 +107,28 @@ COPY patch_mtp_nvfp4_exclusion.py /tmp/
 RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
 
 # ============================================================
+# MTP BF16 Weights (load BF16 MTP weights into INT4 models)
+# ============================================================
+COPY patch_mtp_bf16_weights.py /tmp/
+RUN python3 /tmp/patch_mtp_bf16_weights.py
+
+# ============================================================
+# Marlin N-Padding (Qwen3-Next in_proj_ba N=32 → pad to 64)
+# ============================================================
+COPY patch_marlin_padding.py /tmp/
+RUN python3 /tmp/patch_marlin_padding.py
+
+# ============================================================
+# Qwen3-Next torch.compile Fix (torch.Size across AOT split)
+# Patch 1: GatedDeltaNet z_shape_og → static dims
+# Patch 2: MoE orig_shape → num_tokens, hidden_dim
+# ============================================================
+COPY patch_qwen3next_compile.py /tmp/
+RUN python3 /tmp/patch_qwen3next_compile.py
+COPY patch_qwen3next_compile_v2.py /tmp/
+RUN python3 /tmp/patch_qwen3next_compile_v2.py
+
+# ============================================================
 # UF17v3: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
 # Uses all_reduce_with_output (mutates_args=["output"]) with
 # zero-copy NCCL sendbuf/recvbuf — no temp alloc, no copy_.

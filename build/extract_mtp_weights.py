@@ -35,8 +35,8 @@ except ImportError:
     sys.exit(1)
 
 
-def find_mtp_layer_idx(config_path: Path) -> int:
-    """Find MTP layer index from model config."""
+def find_mtp_config(config_path: Path) -> tuple[int, int]:
+    """Find MTP layer range from model config. Returns (num_hidden, num_mtp)."""
     with open(config_path / "config.json") as f:
         config = json.load(f)
 
@@ -49,8 +49,8 @@ def find_mtp_layer_idx(config_path: Path) -> int:
 
     print(f"  num_hidden_layers: {num_hidden}")
     print(f"  num_nextn_predict_layers: {num_mtp}")
-    print(f"  MTP layer index: {num_hidden} (layer {num_hidden})")
-    return num_hidden
+    print(f"  MTP layer range: {num_hidden}..{num_hidden + num_mtp - 1}")
+    return num_hidden, num_mtp
 
 
 def extract_mtp_weights(bf16_path: Path, int4_path: Path, dry_run: bool = False):
@@ -60,9 +60,9 @@ def extract_mtp_weights(bf16_path: Path, int4_path: Path, dry_run: bool = False)
     print(f"  BF16 source: {bf16_path}")
     print(f"  INT4 target: {int4_path}")
 
-    # Find MTP layer index
-    mtp_idx = find_mtp_layer_idx(bf16_path)
-    mtp_prefix = f"model.layers.{mtp_idx}."
+    # Find MTP layer range
+    num_hidden, num_mtp = find_mtp_config(bf16_path)
+    mtp_prefixes = [f"model.layers.{num_hidden + i}." for i in range(num_mtp)]
 
     # Scan BF16 safetensors files for MTP weights
     bf16_files = sorted(bf16_path.glob("model*.safetensors"))
@@ -76,7 +76,7 @@ def extract_mtp_weights(bf16_path: Path, int4_path: Path, dry_run: bool = False)
     for sf_path in bf16_files:
         with safe_open(str(sf_path), framework="pt", device="cpu") as f:
             for key in f.keys():
-                if key.startswith(mtp_prefix):
+                if any(key.startswith(prefix) for prefix in mtp_prefixes):
                     mtp_tensors[key] = f.get_tensor(key)
 
     if not mtp_tensors:
@@ -124,6 +124,18 @@ def extract_mtp_weights(bf16_path: Path, int4_path: Path, dry_run: bool = False)
         json.dump(index, f, indent=2, ensure_ascii=False)
 
     print(f"  Updated index: added {added} MTP weight mappings")
+
+    # Patch config.json if num_nextn_predict_layers is missing
+    int4_config_path = int4_path / "config.json"
+    with open(int4_config_path) as f:
+        int4_config = json.load(f)
+
+    if not int4_config.get("num_nextn_predict_layers"):
+        int4_config["num_nextn_predict_layers"] = num_mtp
+        with open(int4_config_path, "w") as f:
+            json.dump(int4_config, f, indent=2, ensure_ascii=False)
+        print(f"  Patched config.json: num_nextn_predict_layers={num_mtp}")
+
     print(f"\n  Done! MTP weights are now available in the INT4 model.")
     print(f"\n  To serve with MTP on vLLM 0.16:")
     print(f"    --speculative-config '{{\"method\":\"mtp\",\"num_speculative_tokens\":1}}'")
