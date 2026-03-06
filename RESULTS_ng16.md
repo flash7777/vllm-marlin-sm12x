@@ -184,6 +184,54 @@ params (`w13_weight`/`w2_weight`) instead of GPTQ params (`qweight`/`qzeros`/`sc
 The patch temporarily sets `vllm_config.quant_config=None` during MTP model construction,
 using `object.__setattr__` to bypass `VllmConfig.__post_init__` re-calculation.
 
+## Qwen3.5-122B-A10B GPTQ-Int4 (TP=2)
+
+Model: `Qwen3.5-122B-A10B-GPTQ-Int4` (qwen3_5_moe architecture, 122B total, 10B active)
+Quantization: `gptq_marlin`
+
+### Patches Required
+
+| Patch | File | Purpose |
+|---|---|---|
+| patch_qwen35_ba_q3_5.py | qwen3_5.py | Replace in_proj_b/a ColumnParallelLinear → ReplicatedLinear (Marlin min_thread_n=64, num_v_heads/TP=32<64) |
+| patch_qwen35_ba.py | qwen3_next.py | Same fix for qwen3_next layers |
+| patch_qwen35_compile.py | qwen3_next.py + qwen3_5.py | Fix torch.Size crossing AOT autograd splits (enables torch.compile + CUDA Graphs) |
+
+### Performance (n=5)
+
+| Mode | short | medium | long | Math |
+|------|-------|--------|------|------|
+| enforce-eager | 2.5 | 23.7 | 21.4 | 100% |
+| **torch.compile** | 6.8 | 24.5 | **23.8** | 100% |
+
+**+11% with torch.compile** — modest gain because the hybrid architecture (GatedDeltaNet + Mamba + Conv)
+fragments the compiled graph into many small pieces, limiting fusion opportunities. Unlike Qwen3-Next (3.3×),
+these hybrid layers don't benefit much from graph-level optimization.
+
+**Note**: `short` is misleadingly low — the model uses reasoning mode ("Thinking Process:...")
+and generates 20 max_tokens of thinking, inflating latency. True generation speed is ~24 tok/s.
+
+### Context Scaling (torch.compile)
+
+| ctx | short | medium | long |
+|-----|-------|--------|------|
+| 0 | 23.5 | 24.5 | 24.6 |
+| 512 | 20.2 | 24.1 | 24.4 |
+| 2K | 15.6 | 22.9 | 24.0 |
+| 8K | 7.0 | 19.3 | 22.2 |
+| 16K | 4.7 | 14.9 | 20.1 |
+
+### torch.compile Fix (patch_qwen35_compile.py)
+
+The AOT autograd crash `AssertionError: out_spec != out_desc_spec` was caused by `torch.Size`
+objects crossing graph split boundaries. Fixed by replacing `.shape` captures with explicit
+`int` extraction in 4 locations:
+
+1. `qwen3_next.py` SparseMoeBlock: `orig_shape = hidden_states.shape` → `(num_tokens, hidden_dim)`
+2. `qwen3_next.py` GatedDeltaNet: `z_shape_og = z.shape` → `(z_num, z_heads, z_dim)`
+3. `qwen3_next.py` Attention: `orig_shape = q_gate.shape[:-1]` → `qg_dim0`
+4. `qwen3_5.py` GatedDeltaNet: same as #2
+
 ## Qwen3-Coder-Next: Marlin N-Padding Solution
 
 ### Problem

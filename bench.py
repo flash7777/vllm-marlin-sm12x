@@ -25,10 +25,14 @@ Context scaling (optional, --context):
 """
 import argparse
 import json
+import os
 import random
 import sys
 import time
 import urllib.request
+
+# Unbuffered stdout so progress is visible in real-time
+sys.stdout.reconfigure(line_buffering=True)
 
 def chat(url, model, prompt, max_tokens=200, temperature=0):
     """Send chat request, return (content, completion_tokens, elapsed_s, ttft_s)."""
