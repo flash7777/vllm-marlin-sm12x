@@ -24,8 +24,10 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -60,6 +62,16 @@ def parse_args():
                         help="Disable CUDA graphs and torch.compile")
     parser.add_argument("--no-cuda-graphs", action="store_true",
                         help="Disable CUDA graphs but keep torch.compile")
+    parser.add_argument("--load-format", type=str, default=None,
+                        help="Model loading format (e.g. fastsafetensors)")
+    parser.add_argument("--enable-prefix-caching", action="store_true")
+    parser.add_argument("--reasoning-parser", type=str, default=None)
+    parser.add_argument("--enable-auto-tool-choice", action="store_true")
+    parser.add_argument("--tool-call-parser", type=str, default=None)
+    parser.add_argument("--chat-template", type=str, default=None)
+    parser.add_argument("--kv-cache-dtype", type=str, default=None)
+    parser.add_argument("--max-num-batched-tokens", type=int, default=None)
+    parser.add_argument("--max-num-seqs", type=int, default=None)
     return parser.parse_args()
 
 
@@ -108,6 +120,21 @@ def create_llm(args) -> LLM:
     if args.no_cuda_graphs:
         from vllm.config import CompilationConfig
         kwargs["compilation_config"] = CompilationConfig(cudagraph_mode="none")
+
+    if args.load_format:
+        kwargs["load_format"] = args.load_format
+
+    if args.enable_prefix_caching:
+        kwargs["enable_prefix_caching"] = True
+
+    if args.kv_cache_dtype:
+        kwargs["kv_cache_dtype"] = args.kv_cache_dtype
+
+    if args.max_num_batched_tokens:
+        kwargs["max_num_batched_tokens"] = args.max_num_batched_tokens
+
+    if args.max_num_seqs:
+        kwargs["max_num_seqs"] = args.max_num_seqs
 
     return LLM(**kwargs)
 
@@ -220,6 +247,16 @@ def _add_to_engine(llm, req_id, token_ids, sampling_dict):
     llm.llm_engine.add_request(req_id, {"prompt_token_ids": token_ids}, params)
 
 
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", flags=re.DOTALL)
+
+
+def _strip_thinking(text: str) -> str:
+    """Remove <think>...</think> blocks from reasoning model output."""
+    stripped = _THINK_RE.sub("", text).strip()
+    # If stripping removed everything, return original (safety net)
+    return stripped if stripped else text
+
+
 def run_rank0(llm: LLM, gloo_group, args):
     """Rank 0: HTTP server + continuous batching engine loop.
 
@@ -304,8 +341,26 @@ def run_rank0(llm: LLM, gloo_group, args):
                   f"(inflight: {len(inflight)})", flush=True)
 
         # --- Phase 4: Step (both ranks step in lockstep via NCCL) ---
+        # Timeout prevents system freeze if engine.step() hangs (e.g. NCCL deadlock)
+        STEP_TIMEOUT = 120  # seconds
         try:
-            step_outputs = engine.step()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(engine.step)
+                try:
+                    step_outputs = future.result(timeout=STEP_TIMEOUT)
+                except concurrent.futures.TimeoutError:
+                    msg = (f"[Rank 0] engine.step() timed out after "
+                           f"{STEP_TIMEOUT}s — possible NCCL deadlock. "
+                           f"Failing {len(inflight)} inflight requests.")
+                    print(msg, file=sys.stderr, flush=True)
+                    err = TimeoutError(msg)
+                    for req_id in list(inflight):
+                        with _response_map_lock:
+                            resp_q = _response_map.get(req_id)
+                        if resp_q:
+                            resp_q.put(err)
+                    inflight.clear()
+                    continue
         except Exception as e:
             print(f"[Rank 0] Engine step error: {e}", file=sys.stderr)
             for req_id in list(inflight):
@@ -322,9 +377,28 @@ def run_rank0(llm: LLM, gloo_group, args):
                 req_id = output.request_id
                 inflight.discard(req_id)
                 try:
-                    text = output.outputs[0].text
+                    raw_text = output.outputs[0].text
+                    token_ids = output.outputs[0].token_ids
+                    # Fallback: if detokenizer produced empty text but tokens exist,
+                    # decode manually (workaround for Step 3.5 tuple/list bug)
+                    if not raw_text and token_ids:
+                        tokenizer = llm.llm_engine.tokenizer
+                        ids_list = list(token_ids)
+                        # Debug: show first 20 token IDs and their individual decodes
+                        print(f"[Rank 0] DEBUG token_ids[:{min(20,len(ids_list))}]: {ids_list[:20]}", flush=True)
+                        for tid in ids_list[:10]:
+                            print(f"  id={tid} -> {repr(tokenizer.decode([tid], skip_special_tokens=False))}", flush=True)
+                        raw_text = tokenizer.decode(ids_list, skip_special_tokens=False)
+                        print(f"[Rank 0] Detokenizer fallback (no skip): {len(ids_list)} tokens -> {repr(raw_text[:300])}", flush=True)
+                        raw_text_clean = tokenizer.decode(ids_list, skip_special_tokens=True)
+                        print(f"[Rank 0] Detokenizer fallback (skip):    {repr(raw_text_clean[:300])}", flush=True)
+                        raw_text = raw_text_clean if raw_text_clean else raw_text
+                    # Strip <think>...</think> blocks (reasoning models)
+                    text = _strip_thinking(raw_text)
+                    if raw_text != text or not text:
+                        print(f"[Rank 0] raw={repr(raw_text[:200])} -> stripped={repr(text[:200])}", flush=True)
                     prompt_tokens = len(output.prompt_token_ids) if output.prompt_token_ids else 0
-                    completion_tokens = len(output.outputs[0].token_ids)
+                    completion_tokens = len(token_ids)
                     result = (text, prompt_tokens, completion_tokens)
                 except Exception as e:
                     result = e
@@ -370,8 +444,15 @@ def run_worker(llm: LLM, gloo_group, rank: int):
         # Always step when rank 0 steps (NCCL sync inside)
         # Use has_unfinished_requests OR new_requests to decide
         if engine.has_unfinished_requests() or msg.get("new_requests"):
+            STEP_TIMEOUT = 120
             try:
-                engine.step()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(engine.step)
+                    try:
+                        future.result(timeout=STEP_TIMEOUT)
+                    except concurrent.futures.TimeoutError:
+                        print(f"[Rank {rank}] engine.step() timed out after "
+                              f"{STEP_TIMEOUT}s", file=sys.stderr, flush=True)
             except Exception as e:
                 print(f"[Rank {rank}] Engine step error: {e}", file=sys.stderr)
 
