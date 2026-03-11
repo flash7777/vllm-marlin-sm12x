@@ -45,6 +45,7 @@ ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER bash -c '
       --kv-cache-memory-bytes 10G \
       --enable-prefix-caching \
       --trust-remote-code \
+      --enforce-eager \
   > /tmp/worker.log 2>&1
 '"
 
@@ -64,4 +65,5 @@ podman exec "$HEAD_CONTAINER" \
       --kv-cache-memory-bytes 10G \
       --enable-prefix-caching \
       --trust-remote-code \
+      --enforce-eager \
   2>&1 | tee /tmp/ng17-qwen35-262b-autoround.log

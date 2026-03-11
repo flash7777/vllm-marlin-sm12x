@@ -57,8 +57,14 @@ case "$MODEL_KEY" in
     MAX_MODEL_LEN=16384
     QUANT="gptq_marlin"
     ;;
+  glm5)
+    MODEL_PATH="/data/tensordata/GLM-5-int4-mixed-AutoRound"
+    MODEL_NAME="glm-5"
+    EAGLE3_PATH=""
+    MAX_MODEL_LEN=8192
+    ;;
   *)
-    echo "Usage: $0 <qwen3coder|glm47|qwen3next|step3p5|qwen35|qwen35-122b|qwen35-122b-gptq> [eagle3|mtp]"
+    echo "Usage: $0 <qwen3coder|glm47|qwen3next|step3p5|qwen35|qwen35-122b|qwen35-122b-gptq|glm5> [eagle3|mtp]"
     exit 1
     ;;
 esac

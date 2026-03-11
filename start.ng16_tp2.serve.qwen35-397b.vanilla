@@ -34,7 +34,8 @@ ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER \
       --port $PORT \
       --max-model-len $MAX_MODEL_LEN \
       --gpu-memory-utilization 0.05 \
-      --kv-cache-memory-bytes 10G \
+      --kv-cache-memory-bytes ${KV_CACHE:-5G} \
+      --max-num-seqs 32 \
       --quantization auto_round \
       --trust-remote-code"
 
@@ -51,7 +52,8 @@ podman exec "$HEAD_CONTAINER" \
       --port "$PORT" \
       --max-model-len "$MAX_MODEL_LEN" \
       --gpu-memory-utilization 0.05 \
-      --kv-cache-memory-bytes 10G \
+      --kv-cache-memory-bytes ${KV_CACHE:-5G} \
+      --max-num-seqs 32 \
       --quantization auto_round \
       --trust-remote-code \
   2>&1 | tee /tmp/ng16-qwen35-397b.log

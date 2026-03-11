@@ -466,6 +466,32 @@ def main():
     llm = create_llm(args)
     print(f"[Rank {rank}/{world_size}] LLM engine ready.")
 
+    # --- DIAGNOSTIC: Multiple generation tests ---
+    print(f"[Rank {rank}] Running generation tests (3 sequential calls)...")
+    try:
+        from vllm import SamplingParams as _SP
+        prompts = [
+            "Hello! What is 2+2?",
+            "What is the capital of France?",
+            "Write a haiku about the moon.",
+        ]
+        for i, prompt in enumerate(prompts):
+            sp = _SP(max_tokens=30, temperature=0)
+            outputs = llm.generate([prompt], sp)
+            if rank == 0:
+                for o in outputs:
+                    text = o.outputs[0].text
+                    ids = list(o.outputs[0].token_ids[:10])
+                    n_unique = len(set(o.outputs[0].token_ids))
+                    print(f"[DIAG {i+1}] Prompt: {repr(prompt[:40])}")
+                    print(f"[DIAG {i+1}] Output: {repr(text[:100])}")
+                    print(f"[DIAG {i+1}] IDs: {ids}... unique={n_unique}")
+        print(f"[Rank {rank}] Generation tests done.")
+    except Exception as e:
+        import traceback
+        print(f"[Rank {rank}] DIAG Error: {e}")
+        traceback.print_exc()
+
     # Create GLOO group for CPU-based object broadcasts.
     gloo_group = dist.new_group(backend="gloo")
 

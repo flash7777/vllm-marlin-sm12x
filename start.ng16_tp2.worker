@@ -17,20 +17,13 @@ ssh flash@192.168.1.116 "nohup podman run \
   --name $CONTAINER_NAME \
   --network host \
   --ipc=host \
-  --device /dev/nvidia0 \
-  --device /dev/nvidiactl \
-  --device /dev/nvidia-uvm \
-  --device /dev/nvidia-uvm-tools \
-  --device /dev/dri/card0 \
-  --device /dev/dri/renderD128 \
+  --device nvidia.com/gpu=all \
+  --security-opt=label=disable \
+  --hooks-dir=/usr/share/containers/oci/hooks.d \
   -v /dev/infiniband:/dev/infiniband \
   --cap-add=IPC_LOCK \
-  --security-opt=label=disable \
   -v /data/tensordata:/data/tensordata \
   -v \$HOME/.cache/huggingface:/root/.cache/huggingface \
-  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so.590.48.01:ro \
-  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so.1:ro \
-  -v $NVML_LIB:$NVML_DEST/libnvidia-ml.so:ro \
   -e NCCL_SOCKET_IFNAME=$CX7_IF \
   -e GLOO_SOCKET_IFNAME=$CX7_IF \
   -e TP_SOCKET_IFNAME=$CX7_IF \

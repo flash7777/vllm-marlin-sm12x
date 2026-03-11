@@ -1,23 +1,13 @@
 #!/usr/bin/env python3
 """
-Patch qwen3_5.py load_weights to handle per-expert GPTQ fused weights.
+Patch qwen3_5.py load_weights for AutoRound GPTQ models (e.g. REAP-262B).
 
-Problem: REAP-262B (and similar AutoRound MoE models) stores experts as:
-  experts.gate_up_proj.N.qweight   (per-expert, GPTQ quantized, gate+up fused)
-  experts.gate_up_proj.N.qzeros
-  experts.gate_up_proj.N.scales
-  experts.down_proj.N.qweight
-  experts.down_proj.N.qzeros
-  experts.down_proj.N.scales
+Per-expert fused GPTQ weight loading:
+   REAP-262B stores experts as experts.gate_up_proj.N.qweight (per-expert, fused)
+   but vLLM expects stacked format. Fix: extract expert_id, route to weight_loader.
 
-But vLLM's qwen3_5.py load_fused_expert_weights() expects ALL experts stacked:
-  experts.gate_up_proj  -> tensor [num_experts, ...]
-
-The stacked loading path does params_dict[name] where name still contains ".N.qweight",
-causing KeyError: 'layers.0.mlp.experts.w2_weight.0.qweight'
-
-Fix: Detect per-expert GPTQ pattern, extract expert_id, strip ".N" from param name,
-and use the standard FusedMoE weight_loader with expert_id parameter.
+Note: AutoRound auto_gptq packing stores qzeros=0x77777777 (=zp-1=7), but the
+actual zero_point IS 8. Marlin uint4b8 (bias=8) is correct. No zp correction needed.
 """
 
 import re
@@ -79,11 +69,13 @@ NEW = '''\
                             # Per-expert GPTQ: extract expert_id, fix param name
                             expert_id = int(per_expert_match.group(2))
                             proj_type = per_expert_match.group(1)
-                            # Strip ".N" from mapped name to get base param
-                            # e.g. "experts.w13_weight.0.qweight" -> "experts.w13_weight.qweight"
+                            # Map GPTQ per-expert name to vLLM param name
+                            # e.g. "experts.w13_weight.0.qweight" -> "experts.w13_qweight"
+                            # e.g. "experts.w2_weight.0.scales"  -> "experts.w2_scales"
+                            # e.g. "experts.w13_weight.0.qzeros" -> "experts.w13_qzeros"
                             base_name = re.sub(
-                                r'(experts\.w\d+_weight)\.\d+\.',
-                                r'\1.',
+                                r'(experts\.w\d+)_weight\.\d+\.(\w+)',
+                                r'\\1_\\2',
                                 name_mapped
                             )
                             if is_pp_missing_parameter(base_name, self):
@@ -154,6 +146,11 @@ src = src.replace(OLD, NEW)
 # Add 'import re' if not already imported
 if '\nimport re\n' not in src:
     src = src.replace('\nimport typing\n', '\nimport re\nimport typing\n')
+
+# --- Patch 2: AutoRound zero-point correction ---
+# Add helper function and wrap the weights iterator in load_weights
+# to correct qweight nibbles from zp=7 (AutoRound) to zp=8 (Marlin uint4b8)
+
 
 with open(TARGET, 'w') as f:
     f.write(src)

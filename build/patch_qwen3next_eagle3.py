@@ -96,12 +96,13 @@ class Qwen3NextForCausalLM(
         return hidden_states"""
     new_model_forward = """\
         aux_hidden_states = []
+        _aux_layers = getattr(self, 'aux_hidden_state_layers', ())
         for layer_idx, layer in enumerate(
             islice(self.layers, self.start_layer, self.end_layer),
             start=self.start_layer,
         ):
             # EAGLE3: collect auxiliary hidden states
-            if layer_idx in self.aux_hidden_state_layers:
+            if layer_idx in _aux_layers:
                 aux_hidden_state = (
                     hidden_states + residual if residual is not None
                     else hidden_states
