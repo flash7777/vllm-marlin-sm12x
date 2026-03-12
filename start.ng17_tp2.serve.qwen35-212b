@@ -1,0 +1,69 @@
+#!/bin/bash
+# TP=2 vllm-ng17: Qwen3.5-REAP-212B-A17B W4A16
+# Community fixes: VLLM_MARLIN_USE_ATOMIC_ADD, reasoning-parser qwen3
+# Ref: https://forums.developer.nvidia.com/t/361967
+# Ref: https://github.com/eugr/spark-vllm-docker
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+HEAD_CONTAINER="ng17-tp2-head"
+WORKER_CONTAINER="ng17-tp2-worker"
+MASTER_ADDR="192.168.0.117"
+MASTER_PORT=29500
+MODEL_PATH="/data/tensordata/Qwen3.5-REAP-212B-A17B-W4A16"
+MODEL_NAME="qwen3.5-212b"
+PORT=8011
+MAX_MODEL_LEN=8192
+
+echo "=== vllm-ng17 TP=2: Qwen3.5-REAP-262B INT4 AutoRound ==="
+echo "Modell: $MODEL_PATH"
+echo ""
+
+# Update serve_torchrun.py in both containers
+podman cp "$SCRIPT_DIR/build/serve_torchrun.py" "$HEAD_CONTAINER:/opt/vllm/serve_torchrun.py"
+scp -q "$SCRIPT_DIR/build/serve_torchrun.py" flash@192.168.1.116:/tmp/serve_torchrun.py
+ssh flash@192.168.1.116 "podman cp /tmp/serve_torchrun.py $WORKER_CONTAINER:/opt/vllm/serve_torchrun.py"
+echo "serve_torchrun.py updated in both containers"
+
+# Kill any existing torchrun processes
+podman exec "$HEAD_CONTAINER" bash -c "pkill -f torchrun 2>/dev/null || true" 2>/dev/null || true
+ssh flash@192.168.1.116 "podman exec $WORKER_CONTAINER bash -c 'pkill -f torchrun 2>/dev/null || true'" 2>/dev/null || true
+sleep 2
+
+# PGX (Rank 1)
+ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER bash -c '
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=1 \
+    --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
+    /opt/vllm/serve_torchrun.py \
+      --model $MODEL_PATH \
+      --served-model-name $MODEL_NAME \
+      --port $PORT \
+      --max-model-len $MAX_MODEL_LEN \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --enable-prefix-caching \
+      --trust-remote-code \
+      --enforce-eager \
+  > /tmp/worker.log 2>&1
+'"
+
+sleep 2
+
+# DGX (Rank 0)
+podman exec "$HEAD_CONTAINER" \
+  torchrun \
+    --nnodes=2 --nproc-per-node=1 --node-rank=0 \
+    --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
+    /opt/vllm/serve_torchrun.py \
+      --model "$MODEL_PATH" \
+      --served-model-name "$MODEL_NAME" \
+      --port "$PORT" \
+      --max-model-len "$MAX_MODEL_LEN" \
+      --gpu-memory-utilization 0.05 \
+      --kv-cache-memory-bytes 10G \
+      --enable-prefix-caching \
+      --trust-remote-code \
+      --enforce-eager \
+  2>&1 | tee /tmp/ng17-qwen35-212b.log
