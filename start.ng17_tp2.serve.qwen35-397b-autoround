@@ -1,8 +1,6 @@
 #!/bin/bash
-# TP=2 vllm-ng17: Qwen3.5-397B-A17B INT4 AutoRound
-# Community fixes: VLLM_MARLIN_USE_ATOMIC_ADD, reasoning-parser qwen3
-# Ref: https://forums.developer.nvidia.com/t/361967
-# Ref: https://github.com/eugr/spark-vllm-docker
+# TP=2 vllm-ng-latest: Qwen3.5-397B-A17B INT4 AutoRound (Full MoE, 512 Experts)
+# Based on eugr/spark-vllm-docker recipe + our serve_torchrun.py
 
 set -euo pipefail
 
@@ -16,15 +14,26 @@ MODEL_NAME="qwen3.5-397b"
 PORT=8011
 MAX_MODEL_LEN=131072
 
-echo "=== vllm-ng17 TP=2: Qwen3.5-397B INT4 AutoRound ==="
-echo "Modell: $MODEL_PATH"
+# Drop caches auf beiden Nodes (Unified Memory — jedes MB zählt)
+echo "Dropping caches..."
+sudo sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || echo "  DGX: drop_caches braucht sudo"
+ssh flash@192.168.0.116 "sudo sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches'" 2>/dev/null || echo "  PGX: drop_caches braucht sudo"
+
+echo "=== vllm-ng-latest TP=2: Qwen3.5-397B-A17B INT4 AutoRound ==="
+echo "Modell: $MODEL_PATH (199 GB, 512 Experts)"
+echo "vLLM HEAD + VLLM_MARLIN_USE_ATOMIC_ADD=1"
 echo ""
 
-# Update serve_torchrun.py in both containers
-podman cp "$SCRIPT_DIR/build/serve_torchrun.py" "$HEAD_CONTAINER:/opt/vllm/serve_torchrun.py"
-scp -q "$SCRIPT_DIR/build/serve_torchrun.py" flash@192.168.1.116:/tmp/serve_torchrun.py
-ssh flash@192.168.1.116 "podman cp /tmp/serve_torchrun.py $WORKER_CONTAINER:/opt/vllm/serve_torchrun.py"
-echo "serve_torchrun.py updated in both containers"
+# Copy serve_torchrun.py (pipe statt podman cp — overlay space bug)
+cat "$SCRIPT_DIR/build/serve_torchrun.py" | podman exec -i "$HEAD_CONTAINER" tee /opt/vllm/serve_torchrun.py > /dev/null
+cat "$SCRIPT_DIR/build/serve_torchrun.py" | ssh flash@192.168.1.116 "podman exec -i $WORKER_CONTAINER tee /opt/vllm/serve_torchrun.py > /dev/null"
+
+# Nur patch_kda_validate (CUDA Graphs)
+PATCH="patch_kda_validate.py"
+cat "$SCRIPT_DIR/$PATCH" | podman exec -i "$HEAD_CONTAINER" tee /opt/vllm/$PATCH > /dev/null
+podman exec "$HEAD_CONTAINER" python3 /opt/vllm/$PATCH
+cat "$SCRIPT_DIR/$PATCH" | ssh flash@192.168.1.116 "podman exec -i $WORKER_CONTAINER tee /opt/vllm/$PATCH > /dev/null; podman exec $WORKER_CONTAINER python3 /opt/vllm/$PATCH"
+echo ""
 
 # Kill any existing torchrun processes
 podman exec "$HEAD_CONTAINER" bash -c "pkill -f torchrun 2>/dev/null || true" 2>/dev/null || true
@@ -32,7 +41,13 @@ ssh flash@192.168.1.116 "podman exec $WORKER_CONTAINER bash -c 'pkill -f torchru
 sleep 2
 
 # PGX (Rank 1)
-ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER bash -c '
+ssh flash@192.168.1.116 "podman exec -d \
+  -e TORCH_CUDNN_V8_API_DISABLED=1 \
+  -e VLLM_FLASHINFER_WORKSPACE_BUFFER_SIZE=629145600 \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
+  -e GLOO_SOCKET_IFNAME=enp1s0f0np0 \
+  -e NCCL_SOCKET_IFNAME=enp1s0f0np0 \
+  $WORKER_CONTAINER bash -c '
   torchrun \
     --nnodes=2 --nproc-per-node=1 --node-rank=1 \
     --master-addr=$MASTER_ADDR --master-port=$MASTER_PORT \
@@ -41,9 +56,10 @@ ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER bash -c '
       --served-model-name $MODEL_NAME \
       --port $PORT \
       --max-model-len $MAX_MODEL_LEN \
-      --gpu-memory-utilization 0.05 \
-      --kv-cache-memory-bytes 10G \
-      --enable-prefix-caching \
+      --gpu-memory-utilization 0.70 \
+      --kv-cache-dtype fp8 \
+      --max-num-seqs 16 \
+      --max-num-batched-tokens 8192 \
       --trust-remote-code \
   > /tmp/worker.log 2>&1
 '"
@@ -51,7 +67,13 @@ ssh flash@192.168.1.116 "podman exec -d $WORKER_CONTAINER bash -c '
 sleep 2
 
 # DGX (Rank 0)
-podman exec "$HEAD_CONTAINER" \
+podman exec \
+  -e TORCH_CUDNN_V8_API_DISABLED=1 \
+  -e VLLM_FLASHINFER_WORKSPACE_BUFFER_SIZE=629145600 \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
+  -e GLOO_SOCKET_IFNAME=enp1s0f0np0 \
+  -e NCCL_SOCKET_IFNAME=enp1s0f0np0 \
+  "$HEAD_CONTAINER" \
   torchrun \
     --nnodes=2 --nproc-per-node=1 --node-rank=0 \
     --master-addr="$MASTER_ADDR" --master-port="$MASTER_PORT" \
@@ -60,8 +82,9 @@ podman exec "$HEAD_CONTAINER" \
       --served-model-name "$MODEL_NAME" \
       --port "$PORT" \
       --max-model-len "$MAX_MODEL_LEN" \
-      --gpu-memory-utilization 0.05 \
-      --kv-cache-memory-bytes 10G \
-      --enable-prefix-caching \
+      --gpu-memory-utilization 0.70 \
+      --kv-cache-dtype fp8 \
+      --max-num-seqs 16 \
+      --max-num-batched-tokens 8192 \
       --trust-remote-code \
-  2>&1 | tee /tmp/ng17-qwen35-397b-autoround.log
+  2>&1 | tee /tmp/ng17-qwen35-397b.log

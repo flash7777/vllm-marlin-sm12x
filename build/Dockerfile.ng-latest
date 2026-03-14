@@ -1,0 +1,166 @@
+ARG BASE_IMAGE=nvcr.io/nvidia/vllm:26.02-py3
+FROM ${BASE_IMAGE}
+
+# ============================================================
+# vllm-ng-latest: vLLM HEAD (main) — latest features + fixes
+# Base: nvcr.io/nvidia/vllm:26.02-py3 (PyTorch 2.11, CUDA 13.1.1)
+# Targets: SM120a (RTX PRO 6000) + SM121a (DGX Spark GB10)
+# Features:
+#   - vLLM HEAD (main branch, latest commits)
+#   - Qwen3.5 native + hybrid Mamba/MoE
+#   - torchrun-based multi-node TP serving (serve_torchrun.py)
+#   - Marlin SM12x W4A8/W4A16
+#
+# Build:
+#   DGX:      cd build && podman build -f Dockerfile.ng-latest -t vllm-ng-latest .
+#   Spiegel2: cd build && podman build -f Dockerfile.ng-latest -t vllm-ng-latest .
+# ============================================================
+
+# CUDA Dev-Header (cusparse.h fehlt im Runtime-Image) + libibverbs
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends wget libibverbs-dev && \
+    ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so && \
+    ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') && \
+    wget -qO /tmp/cuda-keyring.deb \
+      "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" && \
+    dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+      libcusparse-dev-13-1 \
+      libcusolver-dev-13-1 \
+      libcufft-dev-13-1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build-Dependencies
+RUN pip install --no-cache-dir cmake ninja setuptools-scm
+
+# ============================================================
+# CUTLASS 4.4.0 (SM120a/SM121a Support + DSL)
+# ============================================================
+RUN git clone --depth 1 --branch v4.4.0 \
+      https://github.com/NVIDIA/cutlass.git /opt/cutlass
+ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+
+# Update nvidia-cutlass-dsl: base image pins 4.3.5, HEAD may need >=4.4.0
+RUN sed -i '/nvidia-cutlass-dsl/d' /etc/pip/constraint.txt && \
+    echo "4.4.0" > /opt/cutlass/python/CuTeDSL/VERSION.EDITABLE && \
+    pip install --no-cache-dir --force-reinstall --no-deps /opt/cutlass/python/CuTeDSL
+
+# ============================================================
+# vLLM pinned commit (0005d2a3c, 2026-03-13 — Qwen3.5 GDN fix)
+# ============================================================
+RUN git clone --filter=blob:none \
+      https://github.com/vllm-project/vllm.git /tmp/vllm-build && \
+    cd /tmp/vllm-build && \
+    git checkout 0005d2a3c
+
+WORKDIR /tmp/vllm-build
+
+# ============================================================
+# Marlin SM121 Patch (SM12x family support for W4A8-FP8)
+# May already be upstream in HEAD — apply if possible
+# ============================================================
+COPY marlin_sm12x.patch /tmp/
+RUN git apply /tmp/marlin_sm12x.patch || echo "Marlin SM12x patch: already applied or code changed"
+
+# Existierendes PyTorch nutzen (NVIDIA's 2.11+cu131)
+RUN python use_existing_torch.py
+
+# Remove flashinfer pin (base image has NVIDIA version)
+RUN sed -i '/flashinfer-python/d' requirements/cuda.txt 2>/dev/null || true && \
+    sed -i '/flashinfer-python/d' pyproject.toml 2>/dev/null || true
+
+# Build-Requirements
+RUN pip install --no-cache-dir -r requirements/build.txt
+
+# Altes vLLM entfernen
+RUN pip uninstall -y vllm
+
+# vLLM bauen mit CUTLASS fuer SM120a + SM121a
+ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+ENV VLLM_TARGET_DEVICE=cuda
+ENV MAX_JOBS=16
+RUN pip install --no-build-isolation --no-cache-dir .
+
+# Aufraeumen
+WORKDIR /
+RUN rm -rf /tmp/vllm-build
+
+# ============================================================
+# transformers 5.x + dependencies
+# HEAD may already support transformers 5.x — install anyway
+# ============================================================
+RUN pip install --no-cache-dir --no-deps "transformers>=5.2" && \
+    pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" && \
+    pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+
+# ============================================================
+# Patches (robust: alle exit 0 bei "pattern not found")
+# HEAD hat viele Fixes upstream — Patches werden versucht
+# und uebersprungen wenn nicht noetig.
+# ============================================================
+
+# Patches 3,4,7,8,11 (compressed_tensors, MoE fallback, buffers, streaming)
+COPY patch_transformers.py /tmp/
+RUN python3 /tmp/patch_transformers.py || echo "WARN: patch_transformers.py (may be upstream)"
+
+# Patch streaming (Anthropic adapter tool_calls Fixes)
+COPY patch_streaming.py /tmp/
+RUN python3 /tmp/patch_streaming.py || echo "WARN: patch_streaming.py (may be upstream)"
+
+# MTP NVFP4 Exclusion
+COPY patch_mtp_nvfp4_exclusion.py /tmp/
+RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py || echo "WARN: patch_mtp_nvfp4_exclusion.py (may be upstream)"
+
+# MTP BF16 Weights
+COPY patch_mtp_bf16_weights.py /tmp/
+RUN python3 /tmp/patch_mtp_bf16_weights.py || echo "WARN: patch_mtp_bf16_weights.py (may be upstream)"
+
+# Marlin N-Padding
+COPY patch_marlin_padding.py /tmp/
+RUN python3 /tmp/patch_marlin_padding.py || echo "WARN: patch_marlin_padding.py (may be upstream)"
+
+# Qwen3-Next/Qwen3.5 torch.compile Fix
+COPY patch_qwen3next_compile.py /tmp/
+RUN python3 /tmp/patch_qwen3next_compile.py || echo "WARN: (may be upstream)"
+COPY patch_qwen3next_compile_v2.py /tmp/
+RUN python3 /tmp/patch_qwen3next_compile_v2.py || echo "WARN: (may be upstream)"
+COPY patch_qwen35_compile.py /tmp/
+RUN python3 /tmp/patch_qwen35_compile.py || echo "WARN: (may be upstream)"
+
+# Qwen3-Next EAGLE3 interface
+COPY patch_qwen3next_eagle3.py /tmp/
+RUN python3 /tmp/patch_qwen3next_eagle3.py || echo "WARN: (may be upstream)"
+
+# UF17v3: EAGER_ALLREDUCE — NCCL AllReduce outside CUDA Graphs
+COPY patch_uf17_eager_allreduce.py /tmp/
+RUN python3 /tmp/patch_uf17_eager_allreduce.py || echo "WARN: UF17 patch (may be upstream)"
+
+# torchrun serve (multi-node TP serving with continuous batching)
+RUN mkdir -p /opt/vllm
+COPY serve_torchrun.py /opt/vllm/serve_torchrun.py
+
+# torch._opaque_base Fix (NVIDIA PyTorch 2.11.0a0 lacks this module)
+COPY patch_torch_opaque.py /tmp/
+RUN python3 /tmp/patch_torch_opaque.py || echo "WARN: torch opaque patch (may be upstream)"
+
+# cv2/typing shadowing fix
+RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+
+# ============================================================
+# MoE Kernel Configs (getunt fuer GB10 + RTX PRO 6000)
+# ============================================================
+COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+
+# ============================================================
+# Verify
+# ============================================================
+RUN python3 -c "\
+import vllm; print('vLLM:', vllm.__version__); \
+import transformers; print('transformers:', transformers.__version__); \
+import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); \
+import torch; print('PyTorch:', torch.__version__); \
+print('CUDA:', torch.version.cuda); \
+import os; \
+assert os.path.exists('/opt/vllm/serve_torchrun.py'); \
+print('torchrun: serve_torchrun.py installed')"

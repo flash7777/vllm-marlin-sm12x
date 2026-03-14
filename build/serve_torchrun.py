@@ -481,7 +481,9 @@ def main():
         print(f"[Rank {rank}] DIAG Error: {e}")
 
     # Create GLOO group for CPU-based object broadcasts.
-    gloo_group = dist.new_group(backend="gloo")
+    # Use infinite timeout — workers idle-wait for rank 0 HTTP requests.
+    from datetime import timedelta
+    gloo_group = dist.new_group(backend="gloo", timeout=timedelta(days=365))
 
     if rank == 0:
         run_rank0(llm, gloo_group, args)
