@@ -45,6 +45,11 @@ RUN apt-get update -qq && \
 # Build-Dependencies
 RUN pip install --no-cache-dir cmake ninja setuptools-scm
 
+# Sichern NVIDIA CUDA torch BEVOR irgendwas es überschreiben kann
+RUN cd /usr/local/lib/python3.12/dist-packages && \
+    tar cf /opt/nvidia-torch.tar torch/ $(ls -d torch*.dist-info 2>/dev/null) && \
+    ls -lh /opt/nvidia-torch.tar
+
 # ============================================================
 # CUTLASS 4.4.0 (SM120a/SM121a Support + DSL)
 # ============================================================
@@ -113,7 +118,15 @@ RUN pip install --no-cache-dir --force-reinstall /tmp/wheels/flashinfer*.whl && 
 # ============================================================
 # fastsafetensors + Ray (eugr)
 # ============================================================
+# fastsafetensors + Ray
+# WICHTIG: pip darf torch NICHT upgraden/downgraden — NVIDIA's CUDA torch muss bleiben.
+# pip constraint: "torch" als leere Constraint pinnt die existierende Version.
+# Ray + fastsafetensors (kann torch CPU downgraden)
 RUN pip install --no-cache-dir fastsafetensors ray[default] nvidia-nvshmem-cu13
+# NVIDIA CUDA torch wiederherstellen (überschreiben, kein uninstall)
+RUN rm -rf /usr/local/lib/python3.12/dist-packages/torch && \
+    tar xf /opt/nvidia-torch.tar -C /usr/local/lib/python3.12/dist-packages/
+RUN python3 -c "import torch; print('PyTorch:', torch.__version__, 'CUDA:', torch.version.cuda); assert torch.version.cuda is not None"
 
 # ============================================================
 # transformers 5.x + dependencies
