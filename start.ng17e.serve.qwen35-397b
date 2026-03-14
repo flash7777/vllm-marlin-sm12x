@@ -33,6 +33,11 @@ podman run -d --name "$HEAD_CONTAINER" \
   -e VLLM_HOST_IP=$HEAD_IP \
   -e RAY_NODE_IP_ADDRESS=$HEAD_IP \
   -e VLLM_UF_EAGER_ALLREDUCE=1 \
+  -e NCCL_SOCKET_IFNAME=$ETH_IF \
+  -e GLOO_SOCKET_IFNAME=$ETH_IF \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IGNORE_CPU_AFFINITY=1 \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
   "$IMAGE" sleep infinity
 
 ssh flash@192.168.1.116 "podman stop $WORKER_CONTAINER 2>/dev/null || true; podman rm $WORKER_CONTAINER 2>/dev/null || true; \
@@ -46,6 +51,11 @@ podman run -d --name $WORKER_CONTAINER \
   -e VLLM_HOST_IP=$WORKER_IP \
   -e RAY_NODE_IP_ADDRESS=$WORKER_IP \
   -e VLLM_UF_EAGER_ALLREDUCE=1 \
+  -e NCCL_SOCKET_IFNAME=$ETH_IF \
+  -e GLOO_SOCKET_IFNAME=$ETH_IF \
+  -e NCCL_IB_DISABLE=0 \
+  -e NCCL_IGNORE_CPU_AFFINITY=1 \
+  -e VLLM_MARLIN_USE_ATOMIC_ADD=1 \
   $IMAGE sleep infinity"
 sleep 3
 
