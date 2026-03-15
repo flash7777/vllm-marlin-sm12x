@@ -95,9 +95,9 @@ podman exec "$HEAD_CONTAINER" \
     --served-model-name "$MODEL_NAME" \
     --host 0.0.0.0 \
     --port "$PORT" \
-    --max-model-len 262144 \
+    --max-model-len 65536 \
     --gpu-memory-utilization 0.05 \
-    --kv-cache-memory-bytes 6G \
+    --kv-cache-memory-bytes 3G \
     --kv-cache-dtype fp8 \
     --max-num-seqs 2 \
     --max-num-batched-tokens 8192 \
