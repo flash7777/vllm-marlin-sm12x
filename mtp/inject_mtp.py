@@ -21,6 +21,7 @@ Requirements:
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -67,10 +68,27 @@ def inject_mtp_weights(mtp_path: str, model_dir: str, dry_run: bool = False):
             print(f"       ... and {len(keys) - 10} more")
         return
 
-    # 1. Copy MTP weights file
-    print(f"\n  Copying MTP weights to {target_path} ...")
-    shutil.copy2(str(mtp_file), str(target_path))
-    print(f"  Copied: {os.path.getsize(target_path) / 1e9:.2f} GB")
+    # 1. Copy MTP weights file + fix key format
+    #    AutoRound produces: experts.{proj}.{id}.qweight
+    #    vLLM expects:       experts.{id}.{proj}.qweight
+    print(f"\n  Loading + fixing key format...")
+    pattern = re.compile(r"(.*\.experts)\.(gate_proj|up_proj|down_proj)\.(\d+)\.(.*)")
+    from safetensors.torch import save_file as torch_save_file
+    tensors = {}
+    fixes = 0
+    with safe_open(str(mtp_file), framework="pt") as f:
+        for key in f.keys():
+            m = pattern.match(key)
+            if m:
+                prefix, proj, idx, suffix = m.groups()
+                new_key = f"{prefix}.{idx}.{proj}.{suffix}"
+                tensors[new_key] = f.get_tensor(key)
+                fixes += 1
+            else:
+                tensors[key] = f.get_tensor(key)
+    keys = list(tensors.keys())  # update keys list for index
+    torch_save_file(tensors, str(target_path))
+    print(f"  Saved: {os.path.getsize(target_path) / 1e9:.2f} GB ({fixes} keys reformatted)")
 
     # 2. Update model.safetensors.index.json
     index_path = model_path / "model.safetensors.index.json"
