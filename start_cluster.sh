@@ -114,21 +114,9 @@ echo "  Head + Worker erstellt"
 # === MTP Quant Patch (beide Nodes) ===
 if $USE_MTP; then
   echo "  Patching MTP quant_config..."
-  PATCH_CMD="python3 -c \"
-import sys
-SPEC='/usr/local/lib/python3.12/dist-packages/vllm/config/speculative.py'
-with open(SPEC) as f: lines=f.readlines()
-for i,l in enumerate(lines):
-  if 'self.model = self.target_model_config.model' in l and 350<i<390:
-    if 'draft_model_config' in lines[i+1]: print('already patched'); sys.exit(0)
-    lines.insert(i+1,'                self.draft_model_config = self.target_model_config\n')
-    lines.insert(i+2,'                self.draft_parallel_config = self.target_parallel_config\n')
-    with open(SPEC,'w') as f: f.writelines(lines)
-    print('patched'); sys.exit(0)
-print('pattern not found'); sys.exit(1)
-\""
-  podman exec ng17e-head bash -c "$PATCH_CMD" 2>&1
-  ssh flash@192.168.1.116 "podman exec ng17e-worker bash -c '$PATCH_CMD'" 2>&1
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | podman exec -i ng17e-head python3 - 2>&1
+  cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
 fi
 
 # === Ray Cluster ===
