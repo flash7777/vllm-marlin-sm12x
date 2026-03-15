@@ -13,7 +13,7 @@ ETH_IF="enp1s0f0np0"
 IMAGE="localhost/vllm-ng17e:latest"
 
 MODEL_PATH="/data/tensordata/Qwen3.5-397B-A17B-int4-AutoRound"
-MODEL_NAME="qwen3.5-397b"
+MODEL_NAME="qwen3.5-397b-vl"
 PORT=8011
 
 echo "=== ng17e+MTP: Qwen3.5-397B TP=2 + BF16 MTP NST=1 ==="
@@ -97,12 +97,13 @@ podman exec "$HEAD_CONTAINER" \
     --port "$PORT" \
     --max-model-len 262144 \
     --gpu-memory-utilization 0.05 \
-    --kv-cache-memory-bytes 4G \
+    --kv-cache-memory-bytes 6G \
     --kv-cache-dtype fp8 \
-    --max-num-seqs 1 \
+    --max-num-seqs 2 \
     --max-num-batched-tokens 8192 \
     --load-format fastsafetensors \
     --enable-prefix-caching \
+    --speculative-config '{"method":"mtp","num_speculative_tokens":1}' \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
