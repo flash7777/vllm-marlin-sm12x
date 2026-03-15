@@ -12,7 +12,7 @@ ETH_IF="enp1s0f0np0"
 IMAGE="localhost/vllm-ng17e:latest"
 
 MODEL_PATH="/data/tensordata/Qwen3.5-397B-A17B-int4-AutoRound"
-MODEL_NAME="qwen3.5-397b"
+MODEL_NAME="qwen3.5-397b-vl"
 PORT=8011
 
 echo "=== ng17e: Qwen3.5-397B TP=2 + UF17 ==="
