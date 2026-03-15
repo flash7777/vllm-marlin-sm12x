@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-ZRAM_SIZE="12G"
+ZRAM_SIZE="2G"
 ZRAM_ALGO="zstd"
 TARGET_SWAPPINESS=10
 
