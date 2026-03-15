@@ -115,7 +115,7 @@ echo "  Head + Worker erstellt"
 if $USE_MTP; then
   echo "  Patching MTP quant_config..."
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  for patch in patch_mtp_quant.py patch_skip_mtp_repack.py patch_drafter_load_format.py; do
+  for patch in patch_mtp_quant.py patch_skip_mtp_repack.py patch_drafter_load_format.py patch_load_w2_marlin.py; do
     cat "$SCRIPT_DIR/mtp/$patch" | podman exec -i ng17e-head python3 - 2>&1
     cat "$SCRIPT_DIR/mtp/$patch" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
   done
