@@ -82,26 +82,32 @@ def main():
     print(f"  Loaded {len(tensors)} tensors")
 
     # Group expert weights by layer
-    # Keys: mtp.layers.0.mlp.experts.{id}.{proj}.{qweight|scales|qzeros|g_idx}
+    # Format 1: mtp.layers.0.mlp.experts.{id}.{proj}.suffix (fixed down_proj)
+    # Format 2: mtp.layers.0.mlp.experts.{proj}.{id}.suffix (unfixed gate_up_proj)
     import re
-    expert_pattern = re.compile(r"(mtp\.layers\.\d+\.mlp\.experts)\.(\d+)\.(gate_proj|up_proj|down_proj)\.(qweight|scales|qzeros|g_idx)")
+    pat1 = re.compile(r"(mtp\.layers\.\d+\.mlp\.experts)\.(\d+)\.(gate_proj|up_proj|down_proj|gate_up_proj)\.(qweight|scales|qzeros|g_idx)")
+    pat2 = re.compile(r"(mtp\.layers\.\d+\.mlp\.experts)\.(gate_proj|up_proj|down_proj|gate_up_proj)\.(\d+)\.(qweight|scales|qzeros|g_idx)")
 
     # Collect all experts per projection
     projections = {}  # (layer_prefix, proj) -> {id -> {suffix -> tensor}}
     passthrough = {}  # Non-expert tensors (norms, attention, fc)
 
     for key, tensor in tensors.items():
-        m = expert_pattern.match(key)
-        if m:
-            prefix, eid, proj, suffix = m.groups()
-            k = (prefix, proj)
-            if k not in projections:
-                projections[k] = {}
-            if int(eid) not in projections[k]:
-                projections[k][int(eid)] = {}
-            projections[k][int(eid)][suffix] = tensor
+        m1 = pat1.match(key)
+        m2 = pat2.match(key) if not m1 else None
+        if m1:
+            prefix, eid, proj, suffix = m1.groups()
+        elif m2:
+            prefix, proj, eid, suffix = m2.groups()
         else:
             passthrough[key] = tensor
+            continue
+        k = (prefix, proj)
+        if k not in projections:
+            projections[k] = {}
+        if int(eid) not in projections[k]:
+            projections[k][int(eid)] = {}
+        projections[k][int(eid)][suffix] = tensor
 
     print(f"  Expert projections: {len(projections)}")
     print(f"  Passthrough tensors: {len(passthrough)}")
