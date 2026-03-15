@@ -103,7 +103,6 @@ podman exec "$HEAD_CONTAINER" \
     --max-num-batched-tokens 8192 \
     --load-format fastsafetensors \
     --enable-prefix-caching \
-    --num-speculative-tokens 1 \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
