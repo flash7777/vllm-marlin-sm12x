@@ -27,10 +27,10 @@ try:
     if MARKER not in src:
         old = '        # 2. Determine whether layer should be quantized'
         new = f'''        # 2. Determine whether layer should be quantized
-        # MTP INT4 patch: treat mtp.* layers as quantized
-        if layer_name.startswith('mtp.') or layer_name.startswith('model.mtp.'):
+        # MTP INT4 patch: only force quantized for MoE expert layers (not attn/norms)
+        if (layer_name.startswith('mtp.') or layer_name.startswith('model.mtp.')) and 'experts' in layer_name:
             import sys as _s
-            _s.stderr.write(f'{MARKER} layer={{layer.__class__.__name__}} name={{layer_name}} FORCED quantized=True\\n')
+            _s.stderr.write(f'{MARKER} layer={{layer.__class__.__name__}} name={{layer_name}} FORCED quantized=True (MoE only)\\n')
             _s.stderr.flush()
             return get_config(layer_name, True)'''
         if old in src:
