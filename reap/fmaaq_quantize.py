@@ -46,28 +46,43 @@ def main():
         logger.info("Standard AutoRound mode (no teacher)")
 
     from auto_round import AutoRound
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 
-    # Build extra_config: shared experts + gates stay BF16
-    extra_config = {}
-    num_layers = 60  # Qwen3.5 REAP-262B
-    for i in range(num_layers):
-        extra_config[f"model.language_model.layers.{i}.mlp.shared_expert_gate"] = {
-            "bits": 16, "data_type": "float"
-        }
-        for proj in ["gate_proj", "up_proj", "down_proj"]:
-            extra_config[f"model.language_model.layers.{i}.mlp.shared_expert.{proj}"] = {
-                "bits": 16, "data_type": "float"
-            }
-
+    # Build layer_config: shared experts + gates stay BF16
+    # Detect correct prefix by checking model's named modules
     logger.info(f"Loading student model: {args.model_path}")
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
+    try:
+        processor = AutoProcessor.from_pretrained(args.model_path, trust_remote_code=True)
+    except Exception:
+        processor = None
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         torch_dtype="auto",
         trust_remote_code=True,
         low_cpu_mem_usage=True,
     )
+
+    # Find the correct module prefix for shared_expert
+    layer_config = {}
+    for n, m in model.named_modules():
+        if "layers.0.mlp.shared_expert_gate" in n:
+            # Extract prefix: e.g. "model.language_model." or "model."
+            prefix = n.split("layers.0.mlp.shared_expert_gate")[0]
+            logger.info(f"Detected layer prefix: '{prefix}'")
+            num_layers = sum(1 for nn, _ in model.named_modules()
+                           if nn.endswith(".mlp.shared_expert_gate"))
+            logger.info(f"Detected {num_layers} layers with shared_expert_gate")
+            for i in range(num_layers):
+                layer_config[f"{prefix}layers.{i}.mlp.shared_expert_gate"] = {
+                    "bits": 16, "data_type": "float"
+                }
+                for proj in ["gate_proj", "up_proj", "down_proj"]:
+                    layer_config[f"{prefix}layers.{i}.mlp.shared_expert.{proj}"] = {
+                        "bits": 16, "data_type": "float"
+                    }
+            break
+    logger.info(f"layer_config: {len(layer_config)} entries (shared experts BF16)")
 
     logger.info("Starting quantization...")
     autoround = AutoRound(
@@ -84,7 +99,8 @@ def main():
         lr=args.lr,
         minmax_lr=args.minmax_lr,
         low_gpu_mem_usage=args.low_gpu_mem_usage,
-        extra_config=extra_config,
+        layer_config=layer_config,
+        processor=processor,
     )
 
     model, layer_config = autoround.quantize()
