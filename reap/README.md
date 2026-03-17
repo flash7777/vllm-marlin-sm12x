@@ -57,6 +57,16 @@ Beide Modelle (397B und REAP-262B) nutzen gestackte Expert-Tensoren:
 
 REAP pruned per-Layer unterschiedlich viele Experts (global 512 → 333) und re-indiziert die verbleibenden.
 
+## Warum das Expert-Mapping wichtig ist
+
+Das per-Layer Mapping (REAP idx → Original idx) hat drei konkrete Anwendungen:
+
+1. **vLLM-ladbare Modelle bauen** (erledigt): Shared-Expert-BF16-Weights aus dem Original extrahieren und in die INT4-Quants einpflanzen. Ohne die korrekte Zuordnung zum Original keine originalen Weights, ohne originale Weights kein vLLM-Loading.
+
+2. **AutoRound-Qualität verbessern** (FMAAQ, noch zu beweisen): Quantisierung gegen das ungeprunte 397B-Original kalibrieren statt gegen das bereits degradierte REAP-262B. Kompensiert Pruning + Quantisierung gleichzeitig. Details: [FMAAQ.md](FMAAQ.md)
+
+3. **Pruning-Verlust lokalisieren und evaluieren**: Die Mapping-Daten zeigen pro Layer welche Experts entfernt wurden. Damit lässt sich analysieren: Welche Layer wurden am stärksten gepruned? Gibt es Korrelation zwischen Pruning-Tiefe und Qualitätsverlust? Welche Expert-Cluster fehlen?
+
 ## Infrastruktur
 
 Die Scripts laufen auf brandis.eu im `tensortools` Container (python:3.12-slim + safetensors + numpy + ml_dtypes). Setup unter `/data/tensortools/` (Dockerfile, build.sh, start.sh). Ergebnisse werden nach DGX transferiert.
