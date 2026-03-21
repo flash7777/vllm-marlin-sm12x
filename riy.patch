@@ -1,0 +1,611 @@
+diff --git a/vllm/config/parallel.py b/vllm/config/parallel.py
+index d4048a4..93dd6f3 100644
+--- a/vllm/config/parallel.py
++++ b/vllm/config/parallel.py
+@@ -147,6 +147,10 @@ class ParallelConfig:
+     models."""
+     enable_eplb: bool = False
+     """Enable expert parallelism load balancing for MoE layers."""
++    riy_expert_profile: str | None = None
++    """Path to a RIY expert profile JSON. Masked experts will be deactivated
++    at load time (weights zeroed, routing weights renormalized). The model
++    structure remains unchanged. See https://github.com/flash7777/riy"""
+     eplb_config: EPLBConfig = Field(default_factory=EPLBConfig)
+     """Expert parallelism configuration."""
+     expert_placement_strategy: ExpertPlacementStrategy = "linear"
+diff --git a/vllm/entrypoints/serve/__init__.py b/vllm/entrypoints/serve/__init__.py
+index 8233d33..3466135 100644
+--- a/vllm/entrypoints/serve/__init__.py
++++ b/vllm/entrypoints/serve/__init__.py
+@@ -52,6 +52,12 @@ def register_vllm_serve_api_routers(app: FastAPI):
+ 
+     attach_tokenize_router(app)
+ 
++    from vllm.entrypoints.serve.riy_api import (
++        attach_router as attach_riy_router,
++    )
++
++    attach_riy_router(app)
++
+     from .instrumentator import register_instrumentator_api_routers
+ 
+     register_instrumentator_api_routers(app)
+diff --git a/vllm/entrypoints/serve/riy_api.py b/vllm/entrypoints/serve/riy_api.py
+new file mode 100644
+index 0000000..df83f27
+--- /dev/null
++++ b/vllm/entrypoints/serve/riy_api.py
+@@ -0,0 +1,110 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""RIY Admin API: Expert statistics and mask management.
++
++Endpoints:
++    GET  /riy/stats          - Export raw expert statistics
++    POST /riy/stats/start    - Start stats collection
++    POST /riy/stats/stop     - Stop stats collection
++    POST /riy/stats/reset    - Reset all counters
++    GET  /riy/mask           - Get current expert mask
++    POST /riy/mask           - Set expert mask
++    DELETE /riy/mask         - Clear expert mask
++    POST /riy/profile/load   - Load mask from profile JSON on disk
++"""
++
++from fastapi import APIRouter, FastAPI, HTTPException
++from pydantic import BaseModel
++
++from vllm.model_executor.layers.fused_moe.riy import get_riy_state
++
++router = APIRouter(prefix="/riy", tags=["riy"])
++
++
++def attach_router(app: FastAPI):
++    app.include_router(router)
++
++
++class MaskRequest(BaseModel):
++    pruned_experts: list[list[int]]
++
++
++class ProfileLoadRequest(BaseModel):
++    path: str
++
++
++@router.get("/stats")
++async def get_stats():
++    riy = get_riy_state()
++    if not riy.enabled:
++        raise HTTPException(status_code=503,
++                            detail="RIY not initialized (no MoE model loaded)")
++    return riy.get_stats()
++
++
++@router.post("/stats/start")
++async def start_collection():
++    riy = get_riy_state()
++    if not riy.enabled:
++        raise HTTPException(status_code=503,
++                            detail="RIY not initialized")
++    riy.start_collection()
++    return {"status": "collecting"}
++
++
++@router.post("/stats/stop")
++async def stop_collection():
++    riy = get_riy_state()
++    riy.stop_collection()
++    return {"status": "stopped"}
++
++
++@router.post("/stats/reset")
++async def reset_stats():
++    riy = get_riy_state()
++    riy.reset_stats()
++    return {"status": "reset"}
++
++
++@router.get("/mask")
++async def get_mask():
++    riy = get_riy_state()
++    return {
++        "pruned_experts": riy.get_mask(),
++        "count": len(riy.get_mask()),
++    }
++
++
++@router.post("/mask")
++async def set_mask(req: MaskRequest):
++    riy = get_riy_state()
++    if not riy.enabled:
++        raise HTTPException(status_code=503,
++                            detail="RIY not initialized")
++    experts = [tuple(x) for x in req.pruned_experts]
++    riy.set_mask(experts)
++    return {"status": "mask_set", "count": len(experts)}
++
++
++@router.delete("/mask")
++async def clear_mask():
++    riy = get_riy_state()
++    riy.clear_mask()
++    return {"status": "mask_cleared"}
++
++
++@router.post("/profile/load")
++async def load_profile(req: ProfileLoadRequest):
++    riy = get_riy_state()
++    if not riy.enabled:
++        raise HTTPException(status_code=503,
++                            detail="RIY not initialized")
++    try:
++        riy.load_profile(req.path)
++    except FileNotFoundError as e:
++        raise HTTPException(status_code=404, detail=str(e))
++    return {
++        "status": "profile_loaded",
++        "path": req.path,
++        "count": len(riy.get_mask()),
++    }
+diff --git a/vllm/model_executor/layers/fused_moe/layer.py b/vllm/model_executor/layers/fused_moe/layer.py
+index 75283b9..c491ea4 100644
+--- a/vllm/model_executor/layers/fused_moe/layer.py
++++ b/vllm/model_executor/layers/fused_moe/layer.py
+@@ -504,6 +504,14 @@ class FusedMoE(CustomOp):
+         self.apply_router_weight_on_input = apply_router_weight_on_input
+         self.activation = MoEActivation.from_str(activation)
+ 
++        # Extract layer index from prefix (e.g. "model.layers.5.mlp" → 5)
++        import re
++        from vllm.model_executor.layers.fused_moe.riy import get_riy_state
++        _layer_match = re.search(r"layers\.(\d+)\.", prefix)
++        _layer_idx = int(_layer_match.group(1)) if _layer_match else -1
++        if _layer_idx >= 0:
++            get_riy_state().register_layer(_layer_idx, num_experts)
++
+         self.router = create_fused_moe_router(
+             top_k=top_k,
+             global_num_experts=self.global_num_experts,
+@@ -521,6 +529,7 @@ class FusedMoE(CustomOp):
+             # TODO(bnell): once we can construct the MK at init time, we
+             # can make this a value.
+             indices_type_getter=lambda: self.quant_method.topk_indices_dtype,
++            layer_idx=_layer_idx,
+         )
+         self.routing_method_type: RoutingMethodType = self.router.routing_method_type
+ 
+diff --git a/vllm/model_executor/layers/fused_moe/riy.py b/vllm/model_executor/layers/fused_moe/riy.py
+new file mode 100644
+index 0000000..a76e003
+--- /dev/null
++++ b/vllm/model_executor/layers/fused_moe/riy.py
+@@ -0,0 +1,231 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++"""RIY: Runtime expert masking and statistics for MoE models.
++
++Provides two capabilities:
++1. Per-(layer, expert) activation statistics (frequency + weight magnitude)
++2. Expert masking with weight renormalization
++
++Statistics are accumulated without filtering — the operator decides
++what to do with them via the admin API or offline tooling.
++"""
++
++import json
++import threading
++from dataclasses import dataclass, field
++from pathlib import Path
++
++import torch
++
++from vllm.logger import init_logger
++
++logger = init_logger(__name__)
++
++
++@dataclass
++class RiyLayerStats:
++    """Per-layer expert statistics accumulator."""
++    num_experts: int
++    # Token count per expert (how often selected by router)
++    freq: torch.Tensor = field(init=False)
++    # Sum of routing weights per expert (contribution magnitude)
++    weight_sum: torch.Tensor = field(init=False)
++
++    def __post_init__(self):
++        self.freq = torch.zeros(self.num_experts, dtype=torch.int64)
++        self.weight_sum = torch.zeros(self.num_experts, dtype=torch.float64)
++
++    def reset(self):
++        self.freq.zero_()
++        self.weight_sum.zero_()
++
++
++class RiyState:
++    """Global RIY state: statistics + expert mask.
++
++    Thread-safe for admin API access. The hot path (apply_mask,
++    record_stats) uses pre-computed tensors without locks.
++    """
++
++    def __init__(self):
++        self._lock = threading.Lock()
++        self._enabled = False
++        self._collecting = False
++        self._num_layers = 0
++        self._num_experts = 0
++        self._layer_stats: list[RiyLayerStats] = []
++        # Mask: set of (layer, expert) tuples to deactivate
++        self._mask: set[tuple[int, int]] = set()
++        # Pre-computed per-layer mask tensors on device (for hot path)
++        self._mask_tensors: dict[int, torch.Tensor] = {}
++        self._profile_loaded = False
++
++    def initialize(self, num_layers: int, num_experts: int):
++        """Called once during model init."""
++        with self._lock:
++            self._num_layers = num_layers
++            self._num_experts = num_experts
++            self._layer_stats = [
++                RiyLayerStats(num_experts) for _ in range(num_layers)
++            ]
++            self._enabled = True
++            logger.info("RIY initialized: %d layers, %d experts/layer",
++                        num_layers, num_experts)
++
++    def register_layer(self, layer_idx: int, num_experts: int):
++        """Register a MoE layer. Called from FusedMoE.__init__."""
++        with self._lock:
++            if num_experts > self._num_experts:
++                self._num_experts = num_experts
++            if layer_idx >= self._num_layers:
++                # Grow stats list
++                while len(self._layer_stats) <= layer_idx:
++                    self._layer_stats.append(
++                        RiyLayerStats(num_experts))
++                self._num_layers = len(self._layer_stats)
++            self._enabled = True
++            # Auto-load profile from config on first registration
++            if not self._profile_loaded:
++                self._try_load_profile_from_config()
++
++    def _try_load_profile_from_config(self):
++        """Load RIY profile if configured via CLI."""
++        self._profile_loaded = True
++        try:
++            from vllm.config import get_current_vllm_config
++            cfg = get_current_vllm_config()
++            profile_path = cfg.parallel_config.riy_expert_profile
++            if profile_path:
++                self.load_profile(profile_path)
++        except Exception:
++            pass  # Config not available yet during early init
++
++    @property
++    def enabled(self) -> bool:
++        return self._enabled
++
++    @property
++    def collecting(self) -> bool:
++        return self._collecting
++
++    def start_collection(self):
++        with self._lock:
++            self._collecting = True
++            logger.info("RIY stats collection started")
++
++    def stop_collection(self):
++        with self._lock:
++            self._collecting = False
++            logger.info("RIY stats collection stopped")
++
++    def reset_stats(self):
++        with self._lock:
++            for s in self._layer_stats:
++                s.reset()
++            logger.info("RIY stats reset")
++
++    def get_stats(self) -> dict:
++        """Export raw statistics as dict."""
++        with self._lock:
++            layers = []
++            for i, s in enumerate(self._layer_stats):
++                layers.append({
++                    "layer": i,
++                    "freq": s.freq.tolist(),
++                    "weight_sum": s.weight_sum.tolist(),
++                })
++            return {
++                "num_layers": self._num_layers,
++                "num_experts": self._num_experts,
++                "collecting": self._collecting,
++                "mask_size": len(self._mask),
++                "layers": layers,
++            }
++
++    def set_mask(self, pruned_experts: list[tuple[int, int]]):
++        """Set expert mask. Experts in the list will be deactivated."""
++        with self._lock:
++            self._mask = set(pruned_experts)
++            self._rebuild_mask_tensors()
++            logger.info("RIY mask set: %d experts masked", len(self._mask))
++
++    def clear_mask(self):
++        with self._lock:
++            self._mask.clear()
++            self._mask_tensors.clear()
++            logger.info("RIY mask cleared")
++
++    def get_mask(self) -> list[list[int]]:
++        with self._lock:
++            return sorted([list(t) for t in self._mask])
++
++    def load_profile(self, path: str):
++        """Load mask from a RIY profile JSON."""
++        p = Path(path)
++        if not p.exists():
++            raise FileNotFoundError(f"RIY profile not found: {path}")
++        with open(p) as f:
++            profile = json.load(f)
++        experts = [tuple(x) for x in profile["pruned_experts"]]
++        self.set_mask(experts)
++        logger.info("RIY profile loaded: %s (%s, %d experts)",
++                     path, profile.get("workload", "unknown"), len(experts))
++
++    def _rebuild_mask_tensors(self):
++        """Rebuild per-layer boolean mask tensors from the mask set."""
++        self._mask_tensors.clear()
++        for layer_idx, expert_idx in self._mask:
++            if layer_idx not in self._mask_tensors:
++                self._mask_tensors[layer_idx] = torch.zeros(
++                    self._num_experts, dtype=torch.bool)
++            self._mask_tensors[layer_idx][expert_idx] = True
++
++    def get_mask_tensor(self, layer_idx: int) -> torch.Tensor | None:
++        """Get pre-computed mask tensor for a layer. None = no mask."""
++        return self._mask_tensors.get(layer_idx)
++
++    def record_stats(self, layer_idx: int, topk_ids: torch.Tensor,
++                     topk_weights: torch.Tensor):
++        """Record activation stats for a layer. Called from hot path."""
++        if not self._collecting or layer_idx >= len(self._layer_stats):
++            return
++        stats = self._layer_stats[layer_idx]
++        # Frequency: count per expert
++        ids_flat = topk_ids.flatten().long().cpu()
++        stats.freq.scatter_add_(
++            0, ids_flat,
++            torch.ones_like(ids_flat, dtype=torch.int64))
++        # Weight magnitude: sum of routing weights per expert
++        weights_flat = topk_weights.flatten().double().cpu()
++        stats.weight_sum.scatter_add_(0, ids_flat, weights_flat)
++
++
++def apply_riy_mask(topk_weights: torch.Tensor,
++                   topk_ids: torch.Tensor,
++                   mask_tensor: torch.Tensor) -> torch.Tensor:
++    """Zero out masked experts and renormalize weights.
++
++    Args:
++        topk_weights: (num_tokens, top_k) routing weights
++        topk_ids: (num_tokens, top_k) expert indices
++        mask_tensor: (num_experts,) bool tensor, True = masked
++
++    Returns:
++        Modified topk_weights with masked experts zeroed and renormalized.
++    """
++    # Find which selections hit masked experts
++    hit = mask_tensor[topk_ids.long()]  # (num_tokens, top_k)
++    # Zero their weights
++    topk_weights = topk_weights.masked_fill(hit, 0.0)
++    # Renormalize per token
++    denom = topk_weights.sum(dim=-1, keepdim=True).clamp(min=1e-9)
++    topk_weights = topk_weights / denom
++    return topk_weights
++
++
++# Global singleton
++_riy_state = RiyState()
++
++
++def get_riy_state() -> RiyState:
++    return _riy_state
+diff --git a/vllm/model_executor/layers/fused_moe/router/base_router.py b/vllm/model_executor/layers/fused_moe/router/base_router.py
+index 6332827..cbd7528 100644
+--- a/vllm/model_executor/layers/fused_moe/router/base_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/base_router.py
+@@ -6,6 +6,10 @@ from collections.abc import Callable
+ import torch
+ 
+ from vllm.distributed.eplb.eplb_state import EplbLayerState
++from vllm.model_executor.layers.fused_moe.riy import (
++    apply_riy_mask,
++    get_riy_state,
++)
+ from vllm.model_executor.layers.fused_moe.router.fused_moe_router import (
+     FusedMoERouter,
+ )
+@@ -114,6 +118,7 @@ class BaseRouter(FusedMoERouter):
+         # TODO(bnell): Once the MK is constructed at layer init time, we
+         # can make this a plain value instead of a callback.
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         """
+         Note: the indices dtype might not be available at router construction
+@@ -128,6 +133,7 @@ class BaseRouter(FusedMoERouter):
+         self.enable_eplb = enable_eplb
+         self.indices_type_getter = indices_type_getter
+         self.capture_fn: Callable[[torch.Tensor], None] | None = None
++        self.layer_idx = layer_idx
+ 
+     def set_capture_fn(self, capture_fn: Callable[[torch.Tensor], None] | None) -> None:
+         """Set a capture callback for logical routed expert IDs."""
+@@ -236,6 +242,16 @@ class BaseRouter(FusedMoERouter):
+             hidden_states, router_logits, indices_type
+         )
+ 
++        # Step 3b: RIY — record stats and apply expert mask
++        riy = get_riy_state()
++        if riy.enabled and self.layer_idx >= 0:
++            if riy.collecting:
++                riy.record_stats(self.layer_idx, topk_ids, topk_weights)
++            mask_t = riy.get_mask_tensor(self.layer_idx)
++            if mask_t is not None:
++                mask_t = mask_t.to(topk_ids.device)
++                topk_weights = apply_riy_mask(topk_weights, topk_ids, mask_t)
++
+         # Capture logical ids before EPLB mapping.
+         if self.capture_fn is not None:
+             self.capture_fn(topk_ids)
+diff --git a/vllm/model_executor/layers/fused_moe/router/custom_routing_router.py b/vllm/model_executor/layers/fused_moe/router/custom_routing_router.py
+index 0367189..2dfb598 100644
+--- a/vllm/model_executor/layers/fused_moe/router/custom_routing_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/custom_routing_router.py
+@@ -21,6 +21,7 @@ class CustomRoutingRouter(BaseRouter):
+         renormalize: bool = True,
+         enable_eplb: bool = False,
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         super().__init__(
+             top_k=top_k,
+@@ -28,6 +29,7 @@ class CustomRoutingRouter(BaseRouter):
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+         self.custom_routing_function = custom_routing_function
+         self.renormalize = renormalize
+diff --git a/vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py b/vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py
+index 5beb782..64bff1d 100644
+--- a/vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/fused_topk_bias_router.py
+@@ -184,6 +184,7 @@ class FusedTopKBiasRouter(BaseRouter):
+         routed_scaling_factor: float = 1.0,
+         enable_eplb: bool = False,
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         super().__init__(
+             top_k=top_k,
+@@ -191,6 +192,7 @@ class FusedTopKBiasRouter(BaseRouter):
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+         self.e_score_correction_bias = e_score_correction_bias
+         self.renormalize = renormalize
+diff --git a/vllm/model_executor/layers/fused_moe/router/fused_topk_router.py b/vllm/model_executor/layers/fused_moe/router/fused_topk_router.py
+index 01376e6..e8caa72 100644
+--- a/vllm/model_executor/layers/fused_moe/router/fused_topk_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/fused_topk_router.py
+@@ -125,6 +125,7 @@ class FusedTopKRouter(BaseRouter):
+         renormalize: bool = True,
+         enable_eplb: bool = False,
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         super().__init__(
+             top_k=top_k,
+@@ -132,6 +133,7 @@ class FusedTopKRouter(BaseRouter):
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+         self.renormalize = renormalize
+         self.scoring_func = scoring_func
+diff --git a/vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py b/vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py
+index 5af2e31..2eafad0 100644
+--- a/vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/grouped_topk_router.py
+@@ -264,6 +264,7 @@ class GroupedTopKRouter(BaseRouter):
+         num_fused_shared_experts: int = 0,
+         enable_eplb: bool = False,
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         super().__init__(
+             top_k=top_k,
+@@ -271,6 +272,7 @@ class GroupedTopKRouter(BaseRouter):
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+         self.num_expert_group = num_expert_group
+         self.topk_group = topk_group
+diff --git a/vllm/model_executor/layers/fused_moe/router/router_factory.py b/vllm/model_executor/layers/fused_moe/router/router_factory.py
+index 11027e8..3d21c0c 100644
+--- a/vllm/model_executor/layers/fused_moe/router/router_factory.py
++++ b/vllm/model_executor/layers/fused_moe/router/router_factory.py
+@@ -49,6 +49,8 @@ def create_fused_moe_router(
+     # eplb parameters
+     enable_eplb: bool = False,
+     eplb_state: EplbLayerState = EMPTY_EPLB_STATE,
++    # riy parameters
++    layer_idx: int = -1,
+ ) -> FusedMoERouter:
+     """
+     Factory function to create the appropriate FusedMoERouter subclass based on
+@@ -98,6 +100,7 @@ def create_fused_moe_router(
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+ 
+     if use_grouped_topk:
+@@ -120,6 +123,7 @@ def create_fused_moe_router(
+             num_fused_shared_experts=num_fused_shared_experts,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+         if (
+             grouped_topk_router.routing_method_type != RoutingMethodType.Unspecified
+@@ -143,6 +147,7 @@ def create_fused_moe_router(
+             renormalize=renormalize,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+ 
+     if e_score_correction_bias is not None:
+@@ -156,6 +161,7 @@ def create_fused_moe_router(
+             routed_scaling_factor=routed_scaling_factor,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+ 
+     return FusedTopKRouter(
+@@ -166,4 +172,5 @@ def create_fused_moe_router(
+         scoring_func=scoring_func,
+         enable_eplb=enable_eplb,
+         indices_type_getter=indices_type_getter,
++        layer_idx=layer_idx,
+     )
+diff --git a/vllm/model_executor/layers/fused_moe/router/routing_simulator_router.py b/vllm/model_executor/layers/fused_moe/router/routing_simulator_router.py
+index f8e4637..e34a595 100644
+--- a/vllm/model_executor/layers/fused_moe/router/routing_simulator_router.py
++++ b/vllm/model_executor/layers/fused_moe/router/routing_simulator_router.py
+@@ -316,6 +316,7 @@ class RoutingSimulatorRouter(BaseRouter):
+         eplb_state: EplbLayerState,
+         enable_eplb: bool = False,
+         indices_type_getter: Callable[[], torch.dtype | None] | None = None,
++        layer_idx: int = -1,
+     ):
+         super().__init__(
+             top_k=top_k,
+@@ -323,6 +324,7 @@ class RoutingSimulatorRouter(BaseRouter):
+             eplb_state=eplb_state,
+             enable_eplb=enable_eplb,
+             indices_type_getter=indices_type_getter,
++            layer_idx=layer_idx,
+         )
+ 
+     @property

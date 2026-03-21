@@ -6,6 +6,8 @@
 #   bash start_cluster.sh              # Standard: 256K, 8G KV, kein MTP
 #   bash start_cluster.sh --mtp        # MTP INT4: 128K, 8G KV
 #   bash start_cluster.sh --mtp-eager  # MTP INT4 ohne CUDA Graphs (Debug)
+#   bash start_cluster.sh --riy <profile.json>  # RIY Expert-Pruning
+#   bash start_cluster.sh --riy <p> --mtp       # RIY + MTP
 #   bash start_cluster.sh --stop       # Alles stoppen
 
 set -euo pipefail
@@ -23,13 +25,22 @@ PORT=8011
 USE_MTP=false
 USE_EAGER=false
 STOP_ONLY=false
-for arg in "$@"; do
-  case $arg in
-    --mtp) USE_MTP=true ;;
-    --mtp-eager) USE_MTP=true; USE_EAGER=true ;;
-    --stop) STOP_ONLY=true ;;
+RIY_PROFILE=""
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --mtp) USE_MTP=true; shift ;;
+    --mtp-eager) USE_MTP=true; USE_EAGER=true; shift ;;
+    --riy) RIY_PROFILE="$2"; shift 2 ;;
+    --stop) STOP_ONLY=true; shift ;;
+    *) echo "Unbekannt: $1"; exit 1 ;;
   esac
 done
+
+# RIY: Profil prüfen + Image wechseln
+if [ -n "$RIY_PROFILE" ]; then
+  [ -f "$RIY_PROFILE" ] || { echo "ERROR: RIY-Profil $RIY_PROFILE nicht gefunden"; exit 1; }
+  IMAGE="localhost/vllm-ng17e-riy:latest"
+fi
 
 # === Stop ===
 stop_all() {
@@ -55,8 +66,8 @@ if $USE_MTP; then
   KV_CACHE="8G"; MAX_LEN=131072; MAX_SEQS=2
   SPEC="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":1}"
   if $USE_EAGER; then
-    EAGER="--enforce-eager"
-    echo "=== Cluster Start: 397B TP=2 + MTP INT4 (eager, kein CUDA Graph) ==="
+    EAGER="--compilation-config {\"cudagraph_mode\":\"none\"}"
+    echo "=== Cluster Start: 397B TP=2 + MTP (no CUDA Graphs) ==="
   else
     echo "=== Cluster Start: 397B TP=2 + MTP INT4 ==="
   fi
@@ -64,6 +75,10 @@ else
   KV_CACHE="8G"; MAX_LEN=262144; MAX_SEQS=3
   SPEC=""
   echo "=== Cluster Start: 397B TP=2 (256K) ==="
+fi
+if [ -n "$RIY_PROFILE" ]; then
+  echo "  RIY-Profil: $RIY_PROFILE"
+  echo "  Image:      $IMAGE"
 fi
 
 # === Prüfe Voraussetzungen ===
@@ -86,6 +101,17 @@ ENVS="-e VLLM_UF_EAGER_ALLREDUCE=1 \
   -e NCCL_SOCKET_IFNAME=$ETH_IF -e GLOO_SOCKET_IFNAME=$ETH_IF \
   -e NCCL_IB_DISABLE=0 -e NCCL_IGNORE_CPU_AFFINITY=1 \
   -e VLLM_MARLIN_USE_ATOMIC_ADD=1"
+
+# MTP: Weight-Format steuern
+# BF16: quant_config wird gestripped, BF16 MTP-Weights geladen
+# fastsafetensors + viele kleine BF16 Expert-Tensoren → NCCL Timeout → load-format auto
+MTP_MODE="BF16"
+if $USE_MTP; then
+  ENVS="$ENVS -e VLLM_MTP_FORCE=$MTP_MODE"
+  if [ "$MTP_MODE" = "BF16" ]; then
+    LOAD_FORMAT="auto"
+  fi
+fi
 
 podman run -d --name ng17e-head \
   --device nvidia.com/gpu=all --security-opt=label=disable \
@@ -111,14 +137,19 @@ ssh flash@192.168.1.116 "podman run -d --name ng17e-worker \
 sleep 2
 echo "  Head + Worker erstellt"
 
-# === MTP Quant Patch (beide Nodes) ===
+# === MTP Runtime-Patches (beide Nodes) ===
 if $USE_MTP; then
-  echo "  Patching MTP quant_config..."
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  for patch in patch_mtp_quant.py patch_drafter_load_format.py; do
-    cat "$SCRIPT_DIR/mtp/$patch" | podman exec -i ng17e-head python3 - 2>&1
-    cat "$SCRIPT_DIR/mtp/$patch" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
-  done
+  # patch_drafter_load_format.py — immer (fastsafetensors OOM Workaround)
+  echo "  Patching drafter load_format..."
+  cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | podman exec -i ng17e-head python3 - 2>&1
+  cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
+  # patch_mtp_quant.py — NUR bei INT4 (forciert quantized=True, widerspricht BF16)
+  if [ "$MTP_MODE" = "INT4" ]; then
+    echo "  Patching MTP quant_config (INT4)..."
+    cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | podman exec -i ng17e-head python3 - 2>&1
+    cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
+  fi
 fi
 
 # === Ray Cluster ===
@@ -153,6 +184,7 @@ echo "  Model:   $MODEL_NAME"
 echo "  Context: $MAX_LEN"
 echo "  KV:      $KV_CACHE"
 echo "  MTP:     $USE_MTP (eager: $USE_EAGER)"
+echo "  RIY:     ${RIY_PROFILE:-none}"
 echo "  Port:    $PORT"
 echo ""
 
@@ -166,10 +198,11 @@ podman exec ng17e-head \
     --kv-cache-dtype fp8 \
     --max-num-seqs "$MAX_SEQS" \
     --max-num-batched-tokens 8192 \
-    --load-format fastsafetensors \
+    --load-format ${LOAD_FORMAT:-fastsafetensors} \
     --enable-prefix-caching \
     ${SPEC:+$SPEC} \
     ${EAGER:+$EAGER} \
+    ${RIY_PROFILE:+--riy-expert-profile "$RIY_PROFILE"} \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --reasoning-parser qwen3 \
