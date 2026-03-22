@@ -71,11 +71,9 @@ if $USE_MTP; then
   SPEC="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":1}"
   if $USE_EAGER; then
     EAGER="--compilation-config {\"cudagraph_mode\":\"none\"}"
-    echo "=== Cluster Start: 397B TP=2 + MTP BF16 (no CUDA Graphs) ==="
+    echo "=== Cluster Start: 397B TP=2 + MTP INT4 moe_wna16 (no CUDA Graphs) ==="
   else
-    # Minimale CUDA Graphs: nur batch=1, reduziert Triton JIT-Compile-Zeit
-    EAGER="--compilation-config {\"cudagraph_capture_sizes\":[1],\"cudagraph_num_of_warmups\":0}"
-    echo "=== Cluster Start: 397B TP=2 + MTP BF16 (CUDA Graphs batch=1) ==="
+    echo "=== Cluster Start: 397B TP=2 + MTP INT4 moe_wna16 ==="
   fi
 else
   KV_CACHE="8G"; MAX_LEN=262144; MAX_SEQS=3
@@ -116,12 +114,9 @@ fi
 # MTP: Weight-Format steuern
 # BF16: quant_config wird gestripped, BF16 MTP-Weights geladen
 # fastsafetensors + viele kleine BF16 Expert-Tensoren → NCCL Timeout → load-format auto
-MTP_MODE="BF16"
+# MTP: moe_wna16 quantization für INT4 MTP (Marlin Kernels)
 if $USE_MTP; then
-  ENVS="$ENVS -e VLLM_MTP_FORCE=$MTP_MODE"
-  if [ "$MTP_MODE" = "BF16" ]; then
-    LOAD_FORMAT="auto"
-  fi
+  QUANTIZATION="moe_wna16"
 fi
 
 podman run -d --name ng17e-head \
@@ -223,6 +218,7 @@ podman exec ng17e-head \
     --enable-prefix-caching \
     ${SPEC:+$SPEC} \
     ${EAGER:+$EAGER} \
+    ${QUANTIZATION:+--quantization "$QUANTIZATION"} \
     ${RIY_PROFILE:+--riy-expert-profile "$RIY_PROFILE"} \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
