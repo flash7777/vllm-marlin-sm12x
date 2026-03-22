@@ -143,29 +143,14 @@ ssh flash@192.168.1.116 "podman run -d --name ng17e-worker \
 sleep 2
 echo "  Head + Worker erstellt"
 
-# === RIY Monitor Guard (beide Nodes) — deaktiviert Stats+HTTP im Hot-Path ===
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "  Patching RIY monitor guard..."
-cat "$SCRIPT_DIR/mtp/patch_riy_monitor_guard.py" | podman exec -i ng17e-head python3 - 2>&1
-cat "$SCRIPT_DIR/mtp/patch_riy_monitor_guard.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
-
 # === MTP Runtime-Patches (beide Nodes) ===
+# RIY Monitor Guard + MTP RIY Enable sind jetzt im Image (vllm-ng17e-riy)
 if $USE_MTP; then
   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  # patch_drafter_load_format.py — immer (fastsafetensors OOM Workaround)
+  # patch_drafter_load_format.py — fastsafetensors OOM Workaround
   echo "  Patching drafter load_format..."
   cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | podman exec -i ng17e-head python3 - 2>&1
   cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
-  # patch_mtp_riy_enable.py — RIY Expert-Pruning auch auf MTP-Layer anwenden
-  echo "  Patching MTP RIY enable..."
-  cat "$SCRIPT_DIR/mtp/patch_mtp_riy_enable.py" | podman exec -i ng17e-head python3 - 2>&1
-  cat "$SCRIPT_DIR/mtp/patch_mtp_riy_enable.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
-  # patch_mtp_quant.py — NUR bei INT4 (forciert quantized=True, widerspricht BF16)
-  if [ "$MTP_MODE" = "INT4" ]; then
-    echo "  Patching MTP quant_config (INT4)..."
-    cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | podman exec -i ng17e-head python3 - 2>&1
-    cat "$SCRIPT_DIR/mtp/patch_mtp_quant.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
-  fi
 fi
 
 # === Ray Cluster ===

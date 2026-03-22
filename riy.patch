@@ -13,19 +13,45 @@ index d4048a4..93dd6f3 100644
      eplb_config: EPLBConfig = Field(default_factory=EPLBConfig)
      """Expert parallelism configuration."""
      expert_placement_strategy: ExpertPlacementStrategy = "linear"
+diff --git a/vllm/engine/arg_utils.py b/vllm/engine/arg_utils.py
+index d0bdd49..e7b05a2 100644
+--- a/vllm/engine/arg_utils.py
++++ b/vllm/engine/arg_utils.py
+@@ -432,6 +432,7 @@ class EngineArgs:
+     )
+     eplb_config: EPLBConfig = get_field(ParallelConfig, "eplb_config")
+     enable_eplb: bool = ParallelConfig.enable_eplb
++    riy_expert_profile: str | None = ParallelConfig.riy_expert_profile
+     expert_placement_strategy: ExpertPlacementStrategy = (
+         ParallelConfig.expert_placement_strategy
+     )
+@@ -931,6 +932,7 @@ class EngineArgs:
+             **parallel_kwargs["disable_nccl_for_dp_synchronization"],
+         )
+         parallel_group.add_argument("--enable-eplb", **parallel_kwargs["enable_eplb"])
++        parallel_group.add_argument("--riy-expert-profile", **parallel_kwargs["riy_expert_profile"])
+         parallel_group.add_argument("--eplb-config", **parallel_kwargs["eplb_config"])
+         parallel_group.add_argument(
+             "--expert-placement-strategy",
+@@ -1745,6 +1747,7 @@ class EngineArgs:
+             dbo_prefill_token_threshold=self.dbo_prefill_token_threshold,
+             disable_nccl_for_dp_synchronization=self.disable_nccl_for_dp_synchronization,
+             enable_eplb=self.enable_eplb,
++            riy_expert_profile=self.riy_expert_profile,
+             eplb_config=self.eplb_config,
+             expert_placement_strategy=self.expert_placement_strategy,
+             max_parallel_loading_workers=self.max_parallel_loading_workers,
 diff --git a/vllm/entrypoints/serve/__init__.py b/vllm/entrypoints/serve/__init__.py
-index 8233d33..3466135 100644
+index 8233d33..84354aa 100644
 --- a/vllm/entrypoints/serve/__init__.py
 +++ b/vllm/entrypoints/serve/__init__.py
-@@ -52,6 +52,12 @@ def register_vllm_serve_api_routers(app: FastAPI):
+@@ -52,6 +52,10 @@ def register_vllm_serve_api_routers(app: FastAPI):
  
      attach_tokenize_router(app)
  
-+    from vllm.entrypoints.serve.riy_api import (
-+        attach_router as attach_riy_router,
-+    )
-+
-+    attach_riy_router(app)
++    # RIY API runs as standalone HTTP server on port 8019 in the
++    # EngineCore worker process (not via FastAPI in the APIServer process).
++    # See vllm/model_executor/layers/fused_moe/riy.py
 +
      from .instrumentator import register_instrumentator_api_routers
  
@@ -147,10 +173,19 @@ index 0000000..df83f27
 +        "count": len(riy.get_mask()),
 +    }
 diff --git a/vllm/model_executor/layers/fused_moe/layer.py b/vllm/model_executor/layers/fused_moe/layer.py
-index 75283b9..c491ea4 100644
+index 75283b9..c8b72c5 100644
 --- a/vllm/model_executor/layers/fused_moe/layer.py
 +++ b/vllm/model_executor/layers/fused_moe/layer.py
-@@ -504,6 +504,14 @@ class FusedMoE(CustomOp):
+@@ -473,6 +473,8 @@ class FusedMoE(CustomOp):
+                 None,
+             )
+ 
++        self._prune_logit_mask = None  # set below after _layer_idx is known
++
+         self.top_k = top_k
+ 
+         self._init_aiter_shared_experts_topK_buffer(
+@@ -504,6 +506,44 @@ class FusedMoE(CustomOp):
          self.apply_router_weight_on_input = apply_router_weight_on_input
          self.activation = MoEActivation.from_str(activation)
  
@@ -160,12 +195,42 @@ index 75283b9..c491ea4 100644
 +        _layer_match = re.search(r"layers\.(\d+)\.", prefix)
 +        _layer_idx = int(_layer_match.group(1)) if _layer_match else -1
 +        if _layer_idx >= 0:
-+            get_riy_state().register_layer(_layer_idx, num_experts)
++            _quant_name = quant_config.__class__.__name__ if quant_config else ""
++            get_riy_state().register_layer(
++                _layer_idx, num_experts,
++                hidden_size=hidden_size,
++                intermediate_size=intermediate_size,
++                quantization=_quant_name)
++
++        # RIY pruning — per-layer sparse expert loading
++        # 1. Logit mask: -inf on pruned → router never selects them
++        # 2. expert_map: logical index → physical index (compact)
++        # 3. local_num_experts reduced → smaller tensors → VRAM savings
++        # 4. Weight loader: skips pruned (expert_map returns -1)
++        import os as _os
++        _riy_profile = _os.environ.get("RIY_EXPERT_PROFILE", "")
++        if not _riy_profile:
++            try:
++                _riy_profile = vllm_config.parallel_config.riy_expert_profile or ""
++            except Exception:
++                pass
++        if _riy_profile and _os.path.exists(_riy_profile) and _layer_idx >= 0:
++            from vllm.model_executor.layers.fused_moe.riy import (
++                build_riy_prune_map,
++            )
++            _num_kept, _prune_map, _lmask = build_riy_prune_map(
++                _layer_idx, self.global_num_experts, _riy_profile)
++            self._prune_logit_mask = _lmask
++            self.local_num_experts = _num_kept
++            # Replace _expert_map (was None from non-EP path)
++            if hasattr(self, '_expert_map'):
++                delattr(self, '_expert_map')
++            self.register_buffer("_expert_map", _prune_map)
 +
          self.router = create_fused_moe_router(
              top_k=top_k,
              global_num_experts=self.global_num_experts,
-@@ -521,6 +529,7 @@ class FusedMoE(CustomOp):
+@@ -521,9 +561,43 @@ class FusedMoE(CustomOp):
              # TODO(bnell): once we can construct the MK at init time, we
              # can make this a value.
              indices_type_getter=lambda: self.quant_method.topk_indices_dtype,
@@ -173,12 +238,67 @@ index 75283b9..c491ea4 100644
          )
          self.routing_method_type: RoutingMethodType = self.router.routing_method_type
  
++        # Set RIY logit mask on router (registered buffer for graph compat)
++        if self._prune_logit_mask is not None:
++            self.register_buffer(
++                "_prune_logit_mask_buf", self._prune_logit_mask,
++                persistent=False)
++            self.router.prune_logit_mask = self._prune_logit_mask_buf
++
++        # Wire RIY stats as registered buffers (graph-compatible).
++        # Only when VLLM_RIY_MONITOR=1 — stats + HTTP have ~5% overhead.
++        self._riy_layer_idx = _layer_idx
++        if _layer_idx >= 0 and _os.environ.get("VLLM_RIY_MONITOR", "0") == "1":
++            _riy = get_riy_state()
++            if _riy.enabled:
++                # Get total layers from model config
++                _total_layers = 0
++                try:
++                    _hf = vllm_config.model_config.hf_config
++                    _total_layers = getattr(_hf, 'num_hidden_layers', 0)
++                    if not _total_layers:
++                        _tc = getattr(_hf, 'text_config', None)
++                        if _tc:
++                            _total_layers = getattr(_tc, 'num_hidden_layers', 0)
++                except Exception:
++                    pass
++                if not _riy._tensors_initialized:
++                    _riy.initialize_tensors(
++                        torch.device("cuda"),
++                        num_layers=_total_layers)
++                fv = _riy.get_freq_view(_layer_idx)
++                wv = _riy.get_weight_view(_layer_idx)
++                if fv is not None:
++                    self.set_riy_state(fv, wv, _riy._collecting_flag)
++
+         # Round up hidden size before creating moe_config.
+         # This way moe_config is created with the correct hidden_size from the start.
+         unpadded_hidden_size = hidden_size
+@@ -1499,6 +1573,18 @@ class FusedMoE(CustomOp):
+         """
+         return self.runner.maybe_all_reduce_tensor_model_parallel(final_hidden_states)
+ 
++    def set_riy_state(self, freq_view: torch.Tensor,
++                      weight_view: torch.Tensor,
++                      collecting_flag: torch.Tensor) -> None:
++        """Wire RIY stats views. Called after model load, before compile."""
++        self.register_buffer("_riy_freq", freq_view, persistent=False)
++        self.register_buffer("_riy_weight", weight_view, persistent=False)
++        self.register_buffer("_riy_collecting", collecting_flag,
++                             persistent=False)
++        self.router.riy_freq_view = self._riy_freq
++        self.router.riy_weight_view = self._riy_weight
++        self.router.riy_collecting_flag = self._riy_collecting
++
+     def forward_native(
+         self,
+         hidden_states: torch.Tensor,
 diff --git a/vllm/model_executor/layers/fused_moe/riy.py b/vllm/model_executor/layers/fused_moe/riy.py
 new file mode 100644
-index 0000000..a76e003
+index 0000000..26c577c
 --- /dev/null
 +++ b/vllm/model_executor/layers/fused_moe/riy.py
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,587 @@
 +# SPDX-License-Identifier: Apache-2.0
 +# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 +"""RIY: Runtime expert masking and statistics for MoE models.
@@ -205,20 +325,38 @@ index 0000000..a76e003
 +
 +@dataclass
 +class RiyLayerStats:
-+    """Per-layer expert statistics accumulator."""
++    """Per-layer expert statistics accumulator.
++
++    Tensors live on GPU to avoid CPU transfers in the hot path
++    (which fail silently during CUDA Graph replay).
++    """
 +    num_experts: int
++    device: torch.device = field(default_factory=lambda: torch.device("cpu"))
 +    # Token count per expert (how often selected by router)
 +    freq: torch.Tensor = field(init=False)
 +    # Sum of routing weights per expert (contribution magnitude)
 +    weight_sum: torch.Tensor = field(init=False)
 +
 +    def __post_init__(self):
-+        self.freq = torch.zeros(self.num_experts, dtype=torch.int64)
-+        self.weight_sum = torch.zeros(self.num_experts, dtype=torch.float64)
++        self.freq = torch.zeros(self.num_experts, dtype=torch.int64,
++                                device=self.device)
++        self.weight_sum = torch.zeros(self.num_experts, dtype=torch.float32,
++                                      device=self.device)
 +
 +    def reset(self):
-+        self.freq.zero_()
-+        self.weight_sum.zero_()
++        # Replace tensors instead of in-place zero — safe from HTTP thread
++        # (in-place .zero_() on GPU tensors from a non-CUDA thread crashes)
++        self.freq = torch.zeros(self.num_experts, dtype=torch.int64,
++                                device=self.device)
++        self.weight_sum = torch.zeros(self.num_experts, dtype=torch.float32,
++                                      device=self.device)
++
++    def ensure_device(self, device: torch.device):
++        """Move tensors to device on first call from GPU."""
++        if self.freq.device != device:
++            self.freq = self.freq.to(device)
++            self.weight_sum = self.weight_sum.to(device)
++            self.device = device
 +
 +
 +class RiyState:
@@ -237,9 +375,21 @@ index 0000000..a76e003
 +        self._layer_stats: list[RiyLayerStats] = []
 +        # Mask: set of (layer, expert) tuples to deactivate
 +        self._mask: set[tuple[int, int]] = set()
++        # Profile mask: experts loaded from --riy-expert-profile (persistent)
++        self._profile_mask: set[tuple[int, int]] = set()
 +        # Pre-computed per-layer mask tensors on device (for hot path)
 +        self._mask_tensors: dict[int, torch.Tensor] = {}
 +        self._profile_loaded = False
++        # Expert dimensions for VRAM estimation
++        self._hidden_size = 0
++        self._intermediate_size = 0
++        self._quantization = ""
++        # Pre-allocated GPU tensors for compiled stats (R2)
++        # Addresses must be stable — used by @torch.compile'd function
++        self._freq_pass: torch.Tensor | None = None       # (num_layers, num_experts)
++        self._weight_pass: torch.Tensor | None = None      # (num_layers, num_experts)
++        self._collecting_flag: torch.Tensor | None = None   # scalar, 0 or 1
++        self._tensors_initialized = False
 +
 +    def initialize(self, num_layers: int, num_experts: int):
 +        """Called once during model init."""
@@ -253,9 +403,15 @@ index 0000000..a76e003
 +            logger.info("RIY initialized: %d layers, %d experts/layer",
 +                        num_layers, num_experts)
 +
-+    def register_layer(self, layer_idx: int, num_experts: int):
++    def register_layer(self, layer_idx: int, num_experts: int,
++                       hidden_size: int = 0, intermediate_size: int = 0,
++                       quantization: str = ""):
 +        """Register a MoE layer. Called from FusedMoE.__init__."""
 +        with self._lock:
++            if hidden_size and not self._hidden_size:
++                self._hidden_size = hidden_size
++                self._intermediate_size = intermediate_size
++                self._quantization = quantization
 +            if num_experts > self._num_experts:
 +                self._num_experts = num_experts
 +            if layer_idx >= self._num_layers:
@@ -265,21 +421,29 @@ index 0000000..a76e003
 +                        RiyLayerStats(num_experts))
 +                self._num_layers = len(self._layer_stats)
 +            self._enabled = True
-+            # Auto-load profile from config on first registration
-+            if not self._profile_loaded:
-+                self._try_load_profile_from_config()
++            _should_load = not self._profile_loaded
++            if _should_load:
++                self._profile_loaded = True
++        # Load profile OUTSIDE the lock to avoid deadlock
++        if _should_load:
++            self._try_load_profile_from_config()
 +
 +    def _try_load_profile_from_config(self):
-+        """Load RIY profile if configured via CLI."""
-+        self._profile_loaded = True
-+        try:
-+            from vllm.config import get_current_vllm_config
-+            cfg = get_current_vllm_config()
-+            profile_path = cfg.parallel_config.riy_expert_profile
-+            if profile_path:
++        """Load RIY profile from env var or CLI config."""
++        import os
++        profile_path = os.environ.get("RIY_EXPERT_PROFILE", "")
++        if not profile_path:
++            try:
++                from vllm.config import get_current_vllm_config
++                cfg = get_current_vllm_config()
++                profile_path = cfg.parallel_config.riy_expert_profile or ""
++            except Exception:
++                pass
++        if profile_path:
++            try:
 +                self.load_profile(profile_path)
-+        except Exception:
-+            pass  # Config not available yet during early init
++            except Exception as e:
++                logger.warning("RIY profile load failed: %s", e)
 +
 +    @property
 +    def enabled(self) -> bool:
@@ -289,18 +453,70 @@ index 0000000..a76e003
 +    def collecting(self) -> bool:
 +        return self._collecting
 +
++    def initialize_tensors(self, device: torch.device, num_layers: int = 0):
++        """Allocate pre-sized GPU tensors for compiled stats.
++
++        Called from FusedMoE.__init__. Uses max(num_layers, self._num_layers)
++        to ensure the tensors are large enough for all layers.
++        Tensor addresses must remain stable for the @torch.compile'd graph.
++        """
++        if self._tensors_initialized:
++            return
++        with self._lock:
++            if self._tensors_initialized:
++                return
++            n_layers = max(num_layers, self._num_layers)
++            if n_layers == 0:
++                return  # Not ready yet
++            self._freq_pass = torch.zeros(
++                n_layers, self._num_experts,
++                dtype=torch.int64, device=device)
++            self._weight_pass = torch.zeros(
++                n_layers, self._num_experts,
++                dtype=torch.float32, device=device)
++            self._collecting_flag = torch.zeros(
++                (), dtype=torch.int32, device=device)
++            self._tensors_initialized = True
++            # Update num_layers if we got a better count
++            if n_layers > self._num_layers:
++                self._num_layers = n_layers
++            logger.info("RIY tensors allocated on %s: %d layers x %d experts",
++                        device, n_layers, self._num_experts)
++
++    def get_freq_view(self, layer_idx: int) -> torch.Tensor | None:
++        """Get 1D freq slice for a layer (stable address for compiled graph)."""
++        if self._freq_pass is not None and layer_idx < self._freq_pass.shape[0]:
++            return self._freq_pass[layer_idx]
++        return None
++
++    def get_weight_view(self, layer_idx: int) -> torch.Tensor | None:
++        """Get 1D weight_sum slice for a layer."""
++        if self._weight_pass is not None and layer_idx < self._weight_pass.shape[0]:
++            return self._weight_pass[layer_idx]
++        return None
++
 +    def start_collection(self):
 +        with self._lock:
 +            self._collecting = True
++            if self._collecting_flag is not None:
++                self._collecting_flag.fill_(1)
 +            logger.info("RIY stats collection started")
 +
 +    def stop_collection(self):
 +        with self._lock:
 +            self._collecting = False
++            if self._collecting_flag is not None:
++                self._collecting_flag.fill_(0)
 +            logger.info("RIY stats collection stopped")
 +
 +    def reset_stats(self):
 +        with self._lock:
++            # In-place zero — addresses must stay stable for compiled graph
++            if self._freq_pass is not None:
++                self._freq_pass.zero_()
++            if self._weight_pass is not None:
++                self._weight_pass.zero_()
++            # Also reset legacy per-layer stats
 +            for s in self._layer_stats:
 +                s.reset()
 +            logger.info("RIY stats reset")
@@ -309,11 +525,22 @@ index 0000000..a76e003
 +        """Export raw statistics as dict."""
 +        with self._lock:
 +            layers = []
-+            for i, s in enumerate(self._layer_stats):
++            for i in range(self._num_layers):
++                try:
++                    if self._freq_pass is not None:
++                        freq = self._freq_pass[i].detach().cpu().tolist()
++                        wsum = self._weight_pass[i].detach().cpu().tolist()
++                    else:
++                        s = self._layer_stats[i]
++                        freq = s.freq.detach().cpu().tolist()
++                        wsum = s.weight_sum.detach().cpu().tolist()
++                except Exception:
++                    freq = [0] * self._num_experts
++                    wsum = [0.0] * self._num_experts
 +                layers.append({
 +                    "layer": i,
-+                    "freq": s.freq.tolist(),
-+                    "weight_sum": s.weight_sum.tolist(),
++                    "freq": freq,
++                    "weight_sum": wsum,
 +                })
 +            return {
 +                "num_layers": self._num_layers,
@@ -348,9 +575,16 @@ index 0000000..a76e003
 +        with open(p) as f:
 +            profile = json.load(f)
 +        experts = [tuple(x) for x in profile["pruned_experts"]]
++        with self._lock:
++            self._profile_mask = set(experts)
 +        self.set_mask(experts)
 +        logger.info("RIY profile loaded: %s (%s, %d experts)",
 +                     path, profile.get("workload", "unknown"), len(experts))
++
++    def get_profile_mask(self) -> list[list[int]]:
++        """Get the profile-loaded mask (persistent, from --riy-expert-profile)."""
++        with self._lock:
++            return sorted([list(t) for t in self._profile_mask])
 +
 +    def _rebuild_mask_tensors(self):
 +        """Rebuild per-layer boolean mask tensors from the mask set."""
@@ -365,20 +599,87 @@ index 0000000..a76e003
 +        """Get pre-computed mask tensor for a layer. None = no mask."""
 +        return self._mask_tensors.get(layer_idx)
 +
++    def on_forward(self):
++        """Called on every MoE forward pass (Python-level, not in graph).
++
++        Starts the HTTP server lazily in the real EngineCore worker process.
++        """
++        ensure_riy_server()
++
 +    def record_stats(self, layer_idx: int, topk_ids: torch.Tensor,
 +                     topk_weights: torch.Tensor):
-+        """Record activation stats for a layer. Called from hot path."""
++        """Record activation stats for a layer. Called from hot path.
++
++        Skips during CUDA Graph capture/replay — scatter_add_ on
++        non-graph tensors would invalidate the capture.
++        """
 +        if not self._collecting or layer_idx >= len(self._layer_stats):
 +            return
 +        stats = self._layer_stats[layer_idx]
-+        # Frequency: count per expert
-+        ids_flat = topk_ids.flatten().long().cpu()
++        stats.ensure_device(topk_ids.device)
++        # Frequency: count per expert (on GPU)
++        ids_flat = topk_ids.flatten().long()
 +        stats.freq.scatter_add_(
 +            0, ids_flat,
 +            torch.ones_like(ids_flat, dtype=torch.int64))
-+        # Weight magnitude: sum of routing weights per expert
-+        weights_flat = topk_weights.flatten().double().cpu()
-+        stats.weight_sum.scatter_add_(0, ids_flat, weights_flat)
++        # Weight magnitude: sum of routing weights per expert (on GPU)
++        stats.weight_sum.scatter_add_(
++            0, ids_flat, topk_weights.flatten().float())
++
++
++def _load_riy_profile(profile_path: str) -> dict:
++    """Load and cache RIY profile."""
++    if not hasattr(_load_riy_profile, '_cache'):
++        _load_riy_profile._cache = {}
++    if profile_path not in _load_riy_profile._cache:
++        with open(profile_path) as f:
++            _load_riy_profile._cache[profile_path] = json.load(f)
++    return _load_riy_profile._cache[profile_path]
++
++
++def build_riy_prune_map(
++    layer_idx: int,
++    original_num_experts: int,
++    profile_path: str,
++) -> tuple[int, torch.Tensor, torch.Tensor]:
++    """Build per-layer expert map from RIY profile.
++
++    Each MoE layer gets its own map — different experts can be pruned
++    in different layers. This is the correct approach because each
++    expert in each layer is a unique FFN with unique weights.
++
++    Args:
++        layer_idx: The layer index in the model
++        original_num_experts: Total experts in the original model
++        profile_path: Path to RIY profile JSON
++
++    Returns:
++        (num_kept, expert_map, logit_mask)
++        - num_kept: number of kept experts for this layer
++        - expert_map: (original_num_experts,) int32, -1 for pruned
++        - logit_mask: (original_num_experts,) float32, 0.0 kept / -inf pruned
++    """
++    profile = _load_riy_profile(profile_path)
++
++    # Collect pruned expert IDs for THIS layer
++    pruned_ids: set[int] = set()
++    for l, e in profile["pruned_experts"]:
++        if l == layer_idx:
++            pruned_ids.add(e)
++
++    expert_map = torch.full((original_num_experts,), -1, dtype=torch.int32)
++    logit_mask = torch.zeros(original_num_experts, dtype=torch.float32)
++    compact_idx = 0
++    for i in range(original_num_experts):
++        if i not in pruned_ids:
++            expert_map[i] = compact_idx
++            compact_idx += 1
++        else:
++            logit_mask[i] = float("-inf")
++
++    logger.info("RIY layer %d: %d/%d experts kept (%d pruned)",
++                layer_idx, compact_idx, original_num_experts, len(pruned_ids))
++    return compact_idx, expert_map, logit_mask
 +
 +
 +def apply_riy_mask(topk_weights: torch.Tensor,
@@ -404,28 +705,277 @@ index 0000000..a76e003
 +    return topk_weights
 +
 +
++# ── Custom op for graph-compatible stats recording ────────────────────────────
++
++def _riy_record_impl(
++    topk_ids: torch.Tensor,
++    topk_weights: torch.Tensor,
++    freq_view: torch.Tensor,
++    weight_view: torch.Tensor,
++    collecting: torch.Tensor,
++) -> None:
++    """Accumulate expert stats. Safe inside CUDA Graph capture + replay."""
++    _ids = topk_ids.reshape(-1).long()
++    _cf = collecting.long().expand(_ids.shape[0])
++    freq_view.scatter_add_(0, _ids, _cf)
++    _w = topk_weights.reshape(-1).to(weight_view.dtype)
++    _cf_f = collecting.float().expand(_w.shape[0])
++    weight_view.scatter_add_(0, _ids, _w * _cf_f)
++
++
++def _riy_record_fake(
++    topk_ids: torch.Tensor,
++    topk_weights: torch.Tensor,
++    freq_view: torch.Tensor,
++    weight_view: torch.Tensor,
++    collecting: torch.Tensor,
++) -> None:
++    """Fake impl for torch.compile tracing — no-op."""
++    pass
++
++
++# Register as vllm custom op
++from vllm.utils.torch_utils import direct_register_custom_op
++direct_register_custom_op(
++    op_name="riy_record",
++    op_func=_riy_record_impl,
++    mutates_args=["freq_view", "weight_view"],
++    fake_impl=_riy_record_fake,
++)
++
++
 +# Global singleton
 +_riy_state = RiyState()
 +
 +
 +def get_riy_state() -> RiyState:
 +    return _riy_state
++
++
++# ── Standalone HTTP server (runs in EngineCore process) ───────────────────────
++
++def _start_riy_server(port: int = 8019):
++    """Start a minimal HTTP server for RIY stats/mask API.
++
++    Runs in a daemon thread inside the EngineCore worker process, so it
++    has direct access to the RiyState singleton (same process, same memory).
++    The main vLLM API server runs on port 8011; this runs on a separate
++    port to avoid any interference.
++
++    Must be started from on_forward() (not register_layer), because
++    register_layer runs in the parent process that forks and dies.
++    """
++    from http.server import HTTPServer, BaseHTTPRequestHandler
++    import json as _json
++    import socket
++
++    class RiyHandler(BaseHTTPRequestHandler):
++        def log_message(self, format, *args):
++            pass  # silence per-request logs
++
++        def _json_response(self, data, status=200):
++            body = _json.dumps(data).encode()
++            self.send_response(status)
++            self.send_header("Content-Type", "application/json")
++            self.send_header("Content-Length", str(len(body)))
++            self.send_header("Access-Control-Allow-Origin", "*")
++            self.end_headers()
++            self.wfile.write(body)
++
++        def do_GET(self):
++            riy = get_riy_state()
++            if self.path == "/riy/stats":
++                if not riy.enabled:
++                    self._json_response(
++                        {"error": "not initialized"}, 503)
++                else:
++                    self._json_response(riy.get_stats())
++            elif self.path == "/riy/mask":
++                self._json_response({
++                    "pruned_experts": riy.get_mask(),
++                    "count": len(riy.get_mask()),
++                    "profile_experts": riy.get_profile_mask(),
++                    "profile_count": len(riy._profile_mask),
++                })
++            elif self.path == "/riy/health":
++                self._json_response({
++                    "enabled": riy.enabled,
++                    "collecting": riy.collecting,
++                    "num_layers": riy._num_layers,
++                    "num_experts": riy._num_experts,
++                    "hidden_size": riy._hidden_size,
++                    "intermediate_size": riy._intermediate_size,
++                    "quantization": riy._quantization,
++                    "mask_size": len(riy._mask),
++                })
++            else:
++                self._json_response({"error": "not found"}, 404)
++
++        def do_POST(self):
++            riy = get_riy_state()
++            content_len = int(self.headers.get("Content-Length", 0))
++            body = self.rfile.read(content_len) if content_len else b""
++
++            if self.path == "/riy/stats/start":
++                riy.start_collection()
++                self._json_response({"status": "collecting"})
++            elif self.path == "/riy/stats/stop":
++                riy.stop_collection()
++                self._json_response({"status": "stopped"})
++            elif self.path == "/riy/stats/reset":
++                riy.reset_stats()
++                self._json_response({"status": "reset"})
++            elif self.path == "/riy/mask":
++                if not riy.enabled:
++                    self._json_response(
++                        {"error": "not initialized"}, 503)
++                    return
++                data = _json.loads(body)
++                experts = [tuple(x) for x in data["pruned_experts"]]
++                riy.set_mask(experts)
++                self._json_response(
++                    {"status": "mask_set", "count": len(experts)})
++            elif self.path == "/riy/profile/load":
++                if not riy.enabled:
++                    self._json_response(
++                        {"error": "not initialized"}, 503)
++                    return
++                data = _json.loads(body)
++                try:
++                    riy.load_profile(data["path"])
++                    self._json_response({
++                        "status": "profile_loaded",
++                        "count": len(riy.get_mask()),
++                    })
++                except FileNotFoundError as e:
++                    self._json_response({"error": str(e)}, 404)
++            else:
++                self._json_response({"error": "not found"}, 404)
++
++        def do_DELETE(self):
++            riy = get_riy_state()
++            if self.path == "/riy/mask":
++                riy.clear_mask()
++                self._json_response({"status": "mask_cleared"})
++            else:
++                self._json_response({"error": "not found"}, 404)
++
++    # Allow port reuse in case parent process still holds it
++    class ReusableHTTPServer(HTTPServer):
++        allow_reuse_address = True
++        allow_reuse_port = True
++
++    try:
++        server = ReusableHTTPServer(("0.0.0.0", port), RiyHandler)
++        logger.info("RIY HTTP server started on port %d (pid=%d)",
++                     port, __import__('os').getpid())
++        server.serve_forever()
++    except OSError as e:
++        logger.warning("RIY HTTP server failed to start on port %d: %s",
++                        port, e)
++
++
++_riy_server_started = False
++
++
++def ensure_riy_server(port: int = 8019):
++    """Start RIY HTTP server once (idempotent)."""
++    global _riy_server_started
++    if _riy_server_started:
++        return
++    _riy_server_started = True
++    t = threading.Thread(target=_start_riy_server, args=(port,), daemon=True)
++    t.start()
 diff --git a/vllm/model_executor/layers/fused_moe/router/base_router.py b/vllm/model_executor/layers/fused_moe/router/base_router.py
-index 6332827..cbd7528 100644
+index 6332827..8289fab 100644
 --- a/vllm/model_executor/layers/fused_moe/router/base_router.py
 +++ b/vllm/model_executor/layers/fused_moe/router/base_router.py
-@@ -6,6 +6,10 @@ from collections.abc import Callable
+@@ -6,6 +6,29 @@ from collections.abc import Callable
  import torch
  
  from vllm.distributed.eplb.eplb_state import EplbLayerState
++import os as _os_riy
++
 +from vllm.model_executor.layers.fused_moe.riy import (
 +    apply_riy_mask,
 +    get_riy_state,
 +)
++
++_riy_monitor_enabled = _os_riy.environ.get('VLLM_RIY_MONITOR', '0') == '1'
++
++
++def _is_capturing() -> bool:
++    """Check if we're inside torch.compile tracing.
++
++    During tracing, we must not perform side-effect ops (scatter_add_ on
++    non-graph tensors, HTTP calls, etc.).
++
++    Note: we only check torch.compiler.is_compiling(), NOT
++    torch.cuda.is_current_stream_capturing(). The latter returns True
++    during both CUDA graph capture AND replay, which would permanently
++    block RIY stats. The scatter_add_ on separate tensors is safe
++    during graph replay (it's just not captured into the graph).
++    """
++    return torch.compiler.is_compiling()
  from vllm.model_executor.layers.fused_moe.router.fused_moe_router import (
      FusedMoERouter,
  )
-@@ -114,6 +118,7 @@ class BaseRouter(FusedMoERouter):
+@@ -84,6 +107,30 @@ if current_platform.is_cuda_alike():
+             src=torch.ones_like(topk_ids_flatten).to(expert_load_view),
+         )
+         return topk_ids
++
++    @torch.compile(dynamic=True, backend=current_platform.simple_compile_backend)
++    def riy_record_stats_compiled(
++        topk_ids: torch.Tensor,
++        topk_weights: torch.Tensor,
++        freq_view: torch.Tensor,
++        weight_view: torch.Tensor,
++        collecting: torch.Tensor,
++    ) -> None:
++        """Compiled stats accumulator — runs inside CUDA Graph replay.
++
++        The collecting flag (GPU scalar, 0 or 1) gates accumulation.
++        When 0, scatter_add_ adds zeros — effectively a no-op but the
++        graph structure stays identical.
++        """
++        ids_flat = topk_ids.flatten().long()
++        gate = collecting.long()
++        freq_view.scatter_add_(
++            0, ids_flat,
++            torch.ones_like(ids_flat, dtype=torch.int64) * gate)
++        weight_view.scatter_add_(
++            0, ids_flat,
++            topk_weights.flatten().to(weight_view.dtype) * collecting.float())
++
+ else:
+ 
+     def eplb_map_to_physical_and_record(
+@@ -95,6 +142,23 @@ else:
+         # CPU fallback: no EPLB so just return as is
+         return topk_ids
+ 
++    def riy_record_stats_compiled(
++        topk_ids: torch.Tensor,
++        topk_weights: torch.Tensor,
++        freq_view: torch.Tensor,
++        weight_view: torch.Tensor,
++        collecting: torch.Tensor,
++    ) -> None:
++        # CPU fallback: plain scatter_add_
++        ids_flat = topk_ids.flatten().long()
++        gate = collecting.long()
++        freq_view.scatter_add_(
++            0, ids_flat,
++            torch.ones_like(ids_flat, dtype=torch.int64) * gate)
++        weight_view.scatter_add_(
++            0, ids_flat,
++            topk_weights.flatten().to(weight_view.dtype) * collecting.float())
++
+ 
+ class BaseRouter(FusedMoERouter):
+     """
+@@ -114,6 +178,7 @@ class BaseRouter(FusedMoERouter):
          # TODO(bnell): Once the MK is constructed at layer init time, we
          # can make this a plain value instead of a callback.
          indices_type_getter: Callable[[], torch.dtype | None] | None = None,
@@ -433,27 +983,52 @@ index 6332827..cbd7528 100644
      ):
          """
          Note: the indices dtype might not be available at router construction
-@@ -128,6 +133,7 @@ class BaseRouter(FusedMoERouter):
+@@ -128,6 +193,13 @@ class BaseRouter(FusedMoERouter):
          self.enable_eplb = enable_eplb
          self.indices_type_getter = indices_type_getter
          self.capture_fn: Callable[[torch.Tensor], None] | None = None
 +        self.layer_idx = layer_idx
++        # RIY compiled stats views (set by FusedMoE.__init__)
++        self.riy_freq_view: torch.Tensor | None = None
++        self.riy_weight_view: torch.Tensor | None = None
++        self.riy_collecting_flag: torch.Tensor | None = None
++        # RIY logit mask: -inf for pruned experts (set by FusedMoE.__init__)
++        self.prune_logit_mask: torch.Tensor | None = None
  
      def set_capture_fn(self, capture_fn: Callable[[torch.Tensor], None] | None) -> None:
          """Set a capture callback for logical routed expert IDs."""
-@@ -236,6 +242,16 @@ class BaseRouter(FusedMoERouter):
+@@ -231,11 +303,35 @@ class BaseRouter(FusedMoERouter):
+         # Step 2: Get indices type.
+         indices_type = self._get_indices_type()
+ 
++        # Step 2b: RIY — mask pruned expert logits before routing
++        if self.prune_logit_mask is not None:
++            router_logits = router_logits + self.prune_logit_mask
++
+         # Step 3: Compute routing (delegated to subclass)
+         topk_weights, topk_ids = self._compute_routing(
              hidden_states, router_logits, indices_type
          )
  
-+        # Step 3b: RIY — record stats and apply expert mask
-+        riy = get_riy_state()
-+        if riy.enabled and self.layer_idx >= 0:
-+            if riy.collecting:
-+                riy.record_stats(self.layer_idx, topk_ids, topk_weights)
-+            mask_t = riy.get_mask_tensor(self.layer_idx)
-+            if mask_t is not None:
-+                mask_t = mask_t.to(topk_ids.device)
-+                topk_weights = apply_riy_mask(topk_weights, topk_ids, mask_t)
++        # Step 3b: RIY — stats on registered buffers (graph-compatible)
++        if self.riy_freq_view is not None:
++            _ids = topk_ids.reshape(-1).long()
++            _cf = self.riy_collecting_flag.long().expand(_ids.shape[0])
++            self.riy_freq_view.scatter_add_(0, _ids, _cf)
++            _w = topk_weights.reshape(-1).to(self.riy_weight_view.dtype)
++            _cf_f = self.riy_collecting_flag.float().expand(_w.shape[0])
++            self.riy_weight_view.scatter_add_(0, _ids, _w * _cf_f)
++
++        # Step 3c: RIY — mask + HTTP server (only with VLLM_RIY_MONITOR=1)
++        if not _is_capturing() and _riy_monitor_enabled:
++            riy = get_riy_state()
++            if riy.enabled and self.layer_idx >= 0:
++                riy.on_forward()
++                mask_t = riy.get_mask_tensor(self.layer_idx)
++                if mask_t is not None:
++                    mask_t = mask_t.to(topk_ids.device)
++                    topk_weights = apply_riy_mask(
++                        topk_weights, topk_ids, mask_t)
 +
          # Capture logical ids before EPLB mapping.
          if self.capture_fn is not None:
