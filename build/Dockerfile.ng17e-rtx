@@ -30,7 +30,7 @@ FROM ${BASE_IMAGE}
 # CUDA Dev-Header + libibverbs
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends wget libibverbs-dev && \
-    ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so && \
+    ln -sf libibverbs.so.1 /usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/libibverbs.so && \
     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') && \
     wget -qO /tmp/cuda-keyring.deb \
       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" && \
@@ -97,7 +97,11 @@ RUN pip install --no-cache-dir -r requirements/build.txt
 # Altes vLLM entfernen
 RUN pip uninstall -y vllm
 
-# vLLM bauen mit CUTLASS fuer SM120a + SM121a
+# Triton Kernels — pre-downloaded (Spiegel 2 TLS bug workaround)
+COPY triton-v3.6.0/ /opt/triton-kernels-src/
+ENV FETCHCONTENT_SOURCE_DIR_TRITON_KERNELS=/opt/triton-kernels-src
+
+# vLLM bauen mit CUTLASS fuer SM120a
 ENV TORCH_CUDA_ARCH_LIST="12.0a"
 ENV VLLM_TARGET_DEVICE=cuda
 ENV MAX_JOBS=16

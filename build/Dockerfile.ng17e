@@ -30,7 +30,7 @@ FROM ${BASE_IMAGE}
 # CUDA Dev-Header + libibverbs
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends wget libibverbs-dev && \
-    ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so && \
+    ln -sf libibverbs.so.1 /usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/libibverbs.so && \
     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') && \
     wget -qO /tmp/cuda-keyring.deb \
       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" && \

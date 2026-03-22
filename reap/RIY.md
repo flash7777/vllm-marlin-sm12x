@@ -72,21 +72,34 @@ Vorteile:
 - Maskierte Experts werden übersprungen → ~35% weniger Quantisierungszeit
 - Shared Experts bleiben BF16 (wie bei 122B/397B Format)
 
-### 2. vLLM RIY-Support (`vllm-riy`)
+### 2. vLLM RIY-Support (`vllm-ng17e-riy` Image)
 
-#### Phase 1 — Pruning on Air (Priorität)
+Zwei separate Aktivierungsstufen — selektiv ein/ausschaltbar:
 
-- **ExpertMask-Klasse**: Hält die Liste maskierter `(layer, expert)` Tupel, thread-safe, JSON-serialisierbar
-- **Hook im MoE-Dispatch** (`fused_moe.py`): Maskierte Experts bekommen Gewicht 0, verbleibende Gewichte werden renormalisiert, kein Re-Indexing
-- **Bestehenden `expert_load_metrics`-Zähler** nach außen exponieren (kein neues Monitoring, nur Interfacing)
-- **Admin-API** (`/admin`): Maske setzen/lesen/löschen, Stats aktivieren/deaktivieren/resetten/exportieren, Prune-Kandidaten vorschlagen
+#### Profil-Maske (`--riy-expert-profile profile.json`)
 
-#### Phase 2 — Ladezeit-Filter
+- **Logit-Mask auf Router** bei Init: geprunte Experts bekommen `-inf`, Router wählt sie nie
+- **Expert-Map**: logischer → physischer Index (kompakt), geprunte Weights nicht geladen
+- **Speicherersparnis**: 20% Pruning → ~20% weniger GPU-RAM
+- **Zero Runtime-Overhead**: Mask ist als Buffer registriert, keine Python-Checks im Hot-Path
+- Aktivierung: `--riy <profile.json>` in `start_cluster.sh`
 
-- **CLI-Parameter** `--riy-expert-profile profile.json`
-- Maskierte Experts werden beim Laden als Zero-Tensor initialisiert, **nicht** aus dem Checkpoint geladen
-- Kein Re-Indexing, Architektur-Metadaten unverändert
-- **Phase 2b Follow-up**: Echte Speicherersparnis (Allokation der Zero-Tensoren überspringen)
+#### Monitor (`--riy-monitor`)
+
+- **Stats-Sammlung**: `scatter_add_` auf GPU-Tensoren, pro Layer/Expert Frequenz + Routing-Weights
+- **HTTP-Server** (Port 8019): `/riy/stats`, `/riy/mask`, `/riy/health`, `/riy/stats/start|stop|reset`
+- **Live-Maske**: Maske per Admin-API setzen/löschen, Renormalisierung im Forward
+- **~5% Performance-Overhead** — nur aktivieren wenn Profiling/Tuning nötig
+- Aktivierung: `--riy-monitor` in `start_cluster.sh` → setzt `VLLM_RIY_MONITOR=1`
+
+#### Kombinationen
+
+| Flag | Profil-Maske | Stats | HTTP | Live-Maske | Overhead |
+|------|-------------|-------|------|-----------|----------|
+| (keins) | — | — | — | — | 0% |
+| `--riy <p>` | aktiv | — | — | — | 0% |
+| `--riy-monitor` | — | aktiv | aktiv | aktiv | ~5% |
+| `--riy <p> --riy-monitor` | aktiv | aktiv | aktiv | aktiv | ~5% |
 
 ### 3. RIY-Profil-Generator
 
@@ -106,18 +119,23 @@ python3 riy_from_mapping.py --pruned expert_mapping_pruned.json --output riy_rea
 ## Workflow
 
 ```
-1. Expert-Scores berechnen (REAP Kalibrierung auf dem Basismodell)
-   ODER bestehende Scores/Mapping nutzen
+1. Modell ohne Profil starten (RIY-Image, kein --riy)
+   → RIY-Code passiv vorhanden, Admin-API erreichbar
                 ↓
-2. RIY-Profil erzeugen (Workload-spezifisch, gewünschte Ratio)
+2. Monitor aktivieren: bash start_cluster.sh --riy-monitor
+   → Stats-Sammlung starten: curl -X POST localhost:8019/riy/stats/start
+   → Workload durchlaufen lassen
+   → Stats exportieren: curl localhost:8019/riy/stats > stats.json
                 ↓
-3. AutoRound mit RIY-Profil (Maske aktiv während Kalibrierung)
-   → INT4 Modell mit 512 Expert-Slots, 179 als Zero markiert
+3. RIY-Profil erzeugen (aus Stats oder REAP-Scores)
+   python3 riy_from_stats.py --stats stats.json --ratio 0.20 --output riy_20pct.json
                 ↓
-4. vLLM mit --riy-expert-profile starten
-   → Maskierte Experts nicht laden, Router renormalisiert
+4. Produktiv mit Profil starten (ohne Monitor):
+   bash start_cluster.sh --riy riy_20pct.json
+   → Geprunte Experts nicht geladen, zero Performance-Overhead
                 ↓
-5. Optional: Admin-API für Live-Anpassung der Maske
+5. Optional: Profil + Monitor für Feintuning:
+   bash start_cluster.sh --riy riy_20pct.json --riy-monitor
 ```
 
 ## Vorteile gegenüber REAP-Publish
@@ -132,14 +150,20 @@ python3 riy_from_mapping.py --pruned expert_mapping_pruned.json --output riy_rea
 | Workload-Anpassung | Nicht möglich | Profil wechseln |
 | Live-Anpassung | Nicht möglich | Admin-API |
 
-## Repositories
+## Implementierung
 
-- **AutoRound RIY-Patch**: `flash7777/vllm-marlin-sm12x/reap/` (dieses Verzeichnis)
-- **vLLM RIY-Fork**: `flash7777/vllm-riy` (noch anzulegen)
-- **RIY-Profile**: Als JSON-Dateien neben dem quantisierten Modell
+- **RIY-Patch**: `riy.patch` (im Repo-Root) — patcht vLLM für Profil-Mask + Monitor
+- **Image**: `vllm-ng17e-riy` (Default in `start_cluster.sh`)
+- **Runtime-Patches** (Sideload bei Container-Start):
+  - `mtp/patch_riy_monitor_guard.py` — Guard für Stats/HTTP hinter `VLLM_RIY_MONITOR=1`
+  - `mtp/patch_mtp_riy_enable.py` — RIY Expert-Mask auch auf MTP-Drafter-Layer
+- **RIY-Profile**: JSON-Dateien, z.B. `/data/tensordata/riy_profile_397b.json`
+- **Ohne RIY**: `--no-riy` in `start_cluster.sh` → nutzt `vllm-ng17e` Image
 
-## Abhängigkeiten
+## Ergebnisse (DGX Spark TP=2, Qwen3.5-397B INT4)
 
-- `expert_mapping_pruned.json` — aus `expert_mapping.py` (bereits erzeugt)
-- AutoRound >= 0.12.0
-- vLLM (zu forken als vllm-riy)
+| Config | tok/s (medium) | Overhead |
+|--------|---------------|----------|
+| Ohne RIY | 28.0 | — |
+| RIY 20% Profil (ohne Monitor) | 27.9 | 0% |
+| RIY 20% Profil (mit Monitor) | 26.4 | 5% |
