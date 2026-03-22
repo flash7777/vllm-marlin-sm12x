@@ -8,6 +8,7 @@
 #   bash start_cluster.sh --mtp-eager  # MTP INT4 ohne CUDA Graphs (Debug)
 #   bash start_cluster.sh --riy <profile.json>  # RIY Expert-Pruning
 #   bash start_cluster.sh --riy <p> --mtp       # RIY + MTP
+#   bash start_cluster.sh --no-riy              # Ohne RIY (vllm-ng17e Image)
 #   bash start_cluster.sh --stop       # Alles stoppen
 
 set -euo pipefail
@@ -16,7 +17,7 @@ set -euo pipefail
 HEAD_IP="192.168.0.117"
 WORKER_IP="192.168.0.116"
 ETH_IF="enp1s0f0np0"
-IMAGE="localhost/vllm-ng17e:latest"
+IMAGE="localhost/vllm-ng17e-riy:latest"
 MODEL_PATH="/data/tensordata/Qwen3.5-397B-A17B-int4-AutoRound"
 MODEL_NAME="qwen3.5-397b-vl"
 PORT=8011
@@ -31,15 +32,15 @@ while [[ $# -gt 0 ]]; do
     --mtp) USE_MTP=true; shift ;;
     --mtp-eager) USE_MTP=true; USE_EAGER=true; shift ;;
     --riy) RIY_PROFILE="$2"; shift 2 ;;
+    --no-riy) IMAGE="localhost/vllm-ng17e:latest"; shift ;;
     --stop) STOP_ONLY=true; shift ;;
     *) echo "Unbekannt: $1"; exit 1 ;;
   esac
 done
 
-# RIY: Profil prüfen + Image wechseln
+# RIY: Profil prüfen
 if [ -n "$RIY_PROFILE" ]; then
   [ -f "$RIY_PROFILE" ] || { echo "ERROR: RIY-Profil $RIY_PROFILE nicht gefunden"; exit 1; }
-  IMAGE="localhost/vllm-ng17e-riy:latest"
 fi
 
 # === Stop ===
@@ -67,9 +68,11 @@ if $USE_MTP; then
   SPEC="--speculative-config {\"method\":\"mtp\",\"num_speculative_tokens\":1}"
   if $USE_EAGER; then
     EAGER="--compilation-config {\"cudagraph_mode\":\"none\"}"
-    echo "=== Cluster Start: 397B TP=2 + MTP (no CUDA Graphs) ==="
+    echo "=== Cluster Start: 397B TP=2 + MTP BF16 (no CUDA Graphs) ==="
   else
-    echo "=== Cluster Start: 397B TP=2 + MTP INT4 ==="
+    # Minimale CUDA Graphs: nur batch=1, reduziert Triton JIT-Compile-Zeit
+    EAGER="--compilation-config {\"cudagraph_capture_sizes\":[1],\"cudagraph_num_of_warmups\":0}"
+    echo "=== Cluster Start: 397B TP=2 + MTP BF16 (CUDA Graphs batch=1) ==="
   fi
 else
   KV_CACHE="8G"; MAX_LEN=262144; MAX_SEQS=3
@@ -144,6 +147,10 @@ if $USE_MTP; then
   echo "  Patching drafter load_format..."
   cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | podman exec -i ng17e-head python3 - 2>&1
   cat "$SCRIPT_DIR/mtp/patch_drafter_load_format.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
+  # patch_mtp_riy_enable.py — RIY Expert-Pruning auch auf MTP-Layer anwenden
+  echo "  Patching MTP RIY enable..."
+  cat "$SCRIPT_DIR/mtp/patch_mtp_riy_enable.py" | podman exec -i ng17e-head python3 - 2>&1
+  cat "$SCRIPT_DIR/mtp/patch_mtp_riy_enable.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
   # patch_mtp_quant.py — NUR bei INT4 (forciert quantized=True, widerspricht BF16)
   if [ "$MTP_MODE" = "INT4" ]; then
     echo "  Patching MTP quant_config (INT4)..."
