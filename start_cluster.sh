@@ -8,6 +8,7 @@
 #   bash start_cluster.sh --mtp-eager  # MTP INT4 ohne CUDA Graphs (Debug)
 #   bash start_cluster.sh --riy <profile.json>  # RIY Expert-Pruning
 #   bash start_cluster.sh --riy <p> --mtp       # RIY + MTP
+#   bash start_cluster.sh --riy-monitor         # Stats + HTTP Server aktivieren
 #   bash start_cluster.sh --no-riy              # Ohne RIY (vllm-ng17e Image)
 #   bash start_cluster.sh --stop       # Alles stoppen
 
@@ -27,11 +28,13 @@ USE_MTP=false
 USE_EAGER=false
 STOP_ONLY=false
 RIY_PROFILE=""
+RIY_MONITOR=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --mtp) USE_MTP=true; shift ;;
     --mtp-eager) USE_MTP=true; USE_EAGER=true; shift ;;
     --riy) RIY_PROFILE="$2"; shift 2 ;;
+    --riy-monitor) RIY_MONITOR=true; shift ;;
     --no-riy) IMAGE="localhost/vllm-ng17e:latest"; shift ;;
     --stop) STOP_ONLY=true; shift ;;
     *) echo "Unbekannt: $1"; exit 1 ;;
@@ -105,6 +108,11 @@ ENVS="-e VLLM_UF_EAGER_ALLREDUCE=1 \
   -e NCCL_IB_DISABLE=0 -e NCCL_IGNORE_CPU_AFFINITY=1 \
   -e VLLM_MARLIN_USE_ATOMIC_ADD=1"
 
+# RIY Monitor: Stats + HTTP Server nur wenn explizit aktiviert
+if $RIY_MONITOR; then
+  ENVS="$ENVS -e VLLM_RIY_MONITOR=1"
+fi
+
 # MTP: Weight-Format steuern
 # BF16: quant_config wird gestripped, BF16 MTP-Weights geladen
 # fastsafetensors + viele kleine BF16 Expert-Tensoren → NCCL Timeout → load-format auto
@@ -139,6 +147,12 @@ ssh flash@192.168.1.116 "podman run -d --name ng17e-worker \
   $IMAGE sleep infinity" > /dev/null
 sleep 2
 echo "  Head + Worker erstellt"
+
+# === RIY Monitor Guard (beide Nodes) — deaktiviert Stats+HTTP im Hot-Path ===
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "  Patching RIY monitor guard..."
+cat "$SCRIPT_DIR/mtp/patch_riy_monitor_guard.py" | podman exec -i ng17e-head python3 - 2>&1
+cat "$SCRIPT_DIR/mtp/patch_riy_monitor_guard.py" | ssh flash@192.168.1.116 "podman exec -i ng17e-worker python3 -" 2>&1
 
 # === MTP Runtime-Patches (beide Nodes) ===
 if $USE_MTP; then
