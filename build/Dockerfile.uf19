@@ -1,0 +1,31 @@
+FROM localhost/vllm-ng:latest
+
+# UF19: Custom AllReduce via raw ibverbs/RoCE (NCCL bypass)
+# Layer on top of existing vllm-ng image.
+# libibverbs-dev already present in vllm-ng base? Check and install if needed.
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends libibverbs-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so
+
+# Build libuf19_rdma.so
+COPY uf19_rdma.cu /tmp/
+RUN nvcc -O2 -arch=sm_121 -shared -Xcompiler -fPIC \
+    -o /opt/vllm/libuf19_rdma.so /tmp/uf19_rdma.cu \
+    -libverbs -lpthread
+
+# Install Python wrapper
+COPY uf19_rdma.py /opt/vllm/uf19_rdma.py
+
+# Patch parallel_state.py for UF19 dispatch
+COPY patch_uf19_rdma_allreduce.py /tmp/
+RUN python3 /tmp/patch_uf19_rdma_allreduce.py
+
+# Verify
+RUN python3 -c "\
+src = open('/usr/local/lib/python3.12/dist-packages/vllm/distributed/parallel_state.py').read(); \
+assert 'uf19_rdma' in src, 'UF19 patch missing!'; \
+import os; \
+assert os.path.exists('/opt/vllm/libuf19_rdma.so'); \
+assert os.path.exists('/opt/vllm/uf19_rdma.py'); \
+print('UF19: All verified')"

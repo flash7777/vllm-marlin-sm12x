@@ -1,0 +1,12 @@
+NVCC = nvcc
+ARCH = sm_121
+CFLAGS = -O2 -arch=$(ARCH)
+LIBS = -libverbs -lpthread
+
+uf19_bench: uf19_bench.cu
+	$(NVCC) $(CFLAGS) -o $@ $< $(LIBS)
+
+clean:
+	rm -f uf19_bench
+
+.PHONY: clean

@@ -1,0 +1,157 @@
+STEP 1/48: FROM nvcr.io/nvidia/vllm:26.02-py3
+STEP 2/48: RUN apt-get update -qq &&     apt-get install -y --no-install-recommends wget libibverbs-dev &&     ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so &&     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') &&     wget -qO /tmp/cuda-keyring.deb       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" &&     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb &&     apt-get update -qq &&     apt-get install -y --no-install-recommends       libcusparse-dev-13-1       libcusolver-dev-13-1       libcufft-dev-13-1 &&     rm -rf /var/lib/apt/lists/*
+--> Using cache be327c22bdc1bbca74107c82970861d27296418858725689fdfd5a3d3c0ad703
+--> be327c22bdc1
+STEP 3/48: RUN pip install --no-cache-dir cmake ninja setuptools-scm
+--> Using cache 108e78227714fb5b81dff0b93b21a9f91ff2fc254235e6d5a53b2f4d4df69a3f
+--> 108e78227714
+STEP 4/48: RUN git clone --depth 1 --branch v4.4.0       https://github.com/NVIDIA/cutlass.git /opt/cutlass
+--> Using cache 44ce9d1076477ed06a2abbf32b1681722e6ca254a4d3ce9845c927cdc3fca682
+--> 44ce9d107647
+STEP 5/48: ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+--> Using cache ce5dfc97af8e88a00e76f140ee09223967fd802717ba20b6b6bc0307e24cf712
+--> ce5dfc97af8e
+STEP 6/48: RUN sed -i '/nvidia-cutlass-dsl/d' /etc/pip/constraint.txt &&     echo "4.4.0" > /opt/cutlass/python/CuTeDSL/VERSION.EDITABLE &&     pip install --no-cache-dir --force-reinstall --no-deps /opt/cutlass/python/CuTeDSL
+--> Using cache 58835e3069a72b04ed53b1cff9e3802b8e9885de863fceaa216244d124fe38fb
+--> 58835e3069a7
+STEP 7/48: RUN git clone --filter=blob:none       https://github.com/vllm-project/vllm.git /tmp/vllm-build &&     cd /tmp/vllm-build &&     git checkout v0.17.0
+--> Using cache 84aca8d8c131a356b2301820c04c4c8f3cc405a17ac8fbc5af5ac90c0d2ef188
+--> 84aca8d8c131
+STEP 8/48: WORKDIR /tmp/vllm-build
+--> Using cache 21952324284d2bbcc539613e01f3e3413419c8a4eabdf988c63232667c2e3d32
+--> 21952324284d
+STEP 9/48: COPY marlin_sm12x.patch /tmp/
+--> Using cache b632c8ac798720467005768126ceef3f331fa78e940db36faf516a95ceca8497
+--> b632c8ac7987
+STEP 10/48: RUN git apply /tmp/marlin_sm12x.patch || echo "Marlin SM12x patch: already applied or code changed"
+--> Using cache 2b8b2c593c0baffaad333bdda1b08aed007668837dab3997487ae4c84ea7ba60
+--> 2b8b2c593c0b
+STEP 11/48: RUN python use_existing_torch.py
+--> Using cache 26d92b94d1773c60f785d05ffd4cb3d08433b27e5152dcce5251d346be626e52
+--> 26d92b94d177
+STEP 12/48: RUN sed -i '/flashinfer-python/d' requirements/cuda.txt &&     sed -i '/flashinfer-python/d' pyproject.toml
+--> Using cache 0591b9582a6c007494d86c3a6529ad58727d1d307cbacfba420d1543b8eaa452
+--> 0591b9582a6c
+STEP 13/48: RUN pip install --no-cache-dir -r requirements/build.txt
+--> Using cache fe1b46a0839975033493570781ffa00efd245a006026558fdaa9bcfbaa0ab3b5
+--> fe1b46a08399
+STEP 14/48: RUN pip uninstall -y vllm
+--> Using cache 8e95e2e7bcbd2cbe29627b92c5dc7f29770f967c8ba15f6606f1532f8be06b30
+--> 8e95e2e7bcbd
+STEP 15/48: ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+--> Using cache 35838fe490400c7eb1bd9bebec03d20bf17fd8e3984ddc765cf55e04ee8845e3
+--> 35838fe49040
+STEP 16/48: ENV VLLM_TARGET_DEVICE=cuda
+--> Using cache 96c28ace46f9ca5b1e0980cd0f9d027cf693e54c919234e471ec061c34aa3b74
+--> 96c28ace46f9
+STEP 17/48: ENV MAX_JOBS=16
+--> Using cache f18fa40893f5fd8dbdeb079468409135ce8b8e0cf492bba50b84468837279e32
+--> f18fa40893f5
+STEP 18/48: RUN pip install --no-build-isolation --no-cache-dir .
+--> Using cache 14cab9c8e94b29752a89d0f74e5ebf9dcf85341c91e4f36cac3d2aeebae19e7c
+--> 14cab9c8e94b
+STEP 19/48: WORKDIR /
+--> Using cache 1a3885979a546e0c4c91b3cca038c9826326676353d38f3b5b028c9e83aa68df
+--> 1a3885979a54
+STEP 20/48: RUN rm -rf /tmp/vllm-build
+--> Using cache c167d757caff54adf3a7c027c3afdc6efbbbfb68abea4e871d0aee108d04d299
+--> c167d757caff
+STEP 21/48: RUN pip install --no-cache-dir --no-deps "transformers>=5.2" &&     pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" &&     pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+--> Using cache da0665061112a9d65c6431814c0bb6a30c2bba931f32dcb5560b26d4d750826b
+--> da0665061112
+STEP 22/48: COPY patch_transformers.py /tmp/
+--> Using cache 947872972310be7509795e3ac71b373c48c571ac67da0f05bcf3bd859b62006e
+--> 947872972310
+STEP 23/48: RUN python3 /tmp/patch_transformers.py || echo "WARN: patch_transformers.py had issues (may be upstream)"
+--> Using cache 40c44c29d746826dc8fd58af901f53d27fead9dcefe8e8809e9e70bf51093348
+--> 40c44c29d746
+STEP 24/48: COPY patch_streaming.py /tmp/
+--> Using cache 7b339af981d297bc9255350a47f1bf7ecf2444fece0569fc9cfdc9b03efb9468
+--> 7b339af981d2
+STEP 25/48: RUN python3 /tmp/patch_streaming.py || echo "WARN: patch_streaming.py had issues (may be upstream)"
+--> Using cache b3d52dc78700ba33aaf09bf36272821794b51fc36496082563edeefb266b187d
+--> b3d52dc78700
+STEP 26/48: COPY patch_mtp_nvfp4_exclusion.py /tmp/
+--> Using cache 453fa05d67fa99b3deb6592f4ac71c9d9fbc71a40db447a706b08135c7f4e200
+--> 453fa05d67fa
+STEP 27/48: RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py || echo "WARN: patch_mtp_nvfp4_exclusion.py had issues"
+--> Using cache 01f3e50e806e3b3dd3ef2775073964a23632df63e54223a0b3e7b45e3db071e3
+--> 01f3e50e806e
+STEP 28/48: COPY patch_mtp_bf16_weights.py /tmp/
+--> Using cache 8b7e3ce40ff31ac76d7da65766a8ce352f4f491ca1e10eb71099bd268b864243
+--> 8b7e3ce40ff3
+STEP 29/48: RUN python3 /tmp/patch_mtp_bf16_weights.py || echo "WARN: patch_mtp_bf16_weights.py had issues"
+--> Using cache 0a503538a3ba6511d125bfbb3462768a11584f2b73721c92d7e43a827630f835
+--> 0a503538a3ba
+STEP 30/48: COPY patch_marlin_padding.py /tmp/
+--> Using cache 1bb4b1a6db21b56f43da0b33ff2a1749f8b84ea52a2d39de16e725cb308ccfb4
+--> 1bb4b1a6db21
+STEP 31/48: RUN python3 /tmp/patch_marlin_padding.py || echo "WARN: patch_marlin_padding.py had issues"
+--> Using cache 389081fbeef2dbc572ebe786f39721d87662e3ef51ac1dd4cbdf8acdbd581083
+--> 389081fbeef2
+STEP 32/48: COPY patch_qwen3next_compile.py /tmp/
+--> Using cache 2cfe5e5bbe31da4f6a6598e16c08c83bac257fa794e374df5c48f1a32cbcc998
+--> 2cfe5e5bbe31
+STEP 33/48: RUN python3 /tmp/patch_qwen3next_compile.py || echo "WARN: patch_qwen3next_compile.py had issues (may be upstream)"
+--> Using cache 0f6b8e4abe91dd8d0e83065b802a1c059aa80a5fa368dd0e7be03b69fd51777a
+--> 0f6b8e4abe91
+STEP 34/48: COPY patch_qwen3next_compile_v2.py /tmp/
+--> Using cache 7bac222f78f7d61795e3eababdef3d097c24d09a769545718c345c5e1490e56c
+--> 7bac222f78f7
+STEP 35/48: RUN python3 /tmp/patch_qwen3next_compile_v2.py || echo "WARN: patch_qwen3next_compile_v2.py had issues (may be upstream)"
+--> Using cache 33e2baca5a1ccc1ac7a18b87f6ecda3dce680a1be0c9fee3b60bf84153ca123e
+--> 33e2baca5a1c
+STEP 36/48: COPY patch_qwen35_compile.py /tmp/
+--> Using cache 0d8c0db90c6af15eb435e9739186a3899f6059e2f549a63bde5588b86ea2325a
+--> 0d8c0db90c6a
+STEP 37/48: RUN python3 /tmp/patch_qwen35_compile.py || echo "WARN: patch_qwen35_compile.py had issues (may be upstream)"
+--> Using cache 67ab3598836ba4c589685f3c849f47e7a75582a6c0d844ff096ade9fc2345678
+--> 67ab3598836b
+STEP 38/48: COPY patch_qwen3next_eagle3.py /tmp/
+--> e3d2ec7e7a04
+STEP 39/48: RUN python3 /tmp/patch_qwen3next_eagle3.py || echo "WARN: patch_qwen3next_eagle3.py had issues (may be upstream)"
+  [1] Added SupportsEagle3 import
+  [2] Added SupportsEagle3 to class MRO
+  [3] Added aux_hidden_state_layers to Qwen3NextModel
+  [4] Modified Model.forward() for aux hidden states
+  [5] Added EAGLE3 methods to ForCausalLM
+OK: 5 EAGLE3 interface changes applied to /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_next.py
+--> d7b83eb6078e
+STEP 40/48: COPY patch_uf17_eager_allreduce.py /tmp/
+--> e831d48c52e0
+STEP 41/48: RUN python3 /tmp/patch_uf17_eager_allreduce.py
+WARNING: Could not find all_reduce dispatch block, trying flexible match
+UF17v3: Patched parallel_state.py — all_reduce_with_output registered + dispatch added
+UF17v3: Added 'import os' after 'import enum'
+UF17v3: Patched compilation.py — EAGER_ALLREDUCE with zero-copy op
+UF17v3: Done
+--> b24636a594e4
+STEP 42/48: RUN mkdir -p /opt/vllm
+--> 094cc0552a4a
+STEP 43/48: COPY serve_torchrun.py /opt/vllm/serve_torchrun.py
+--> 8920b75eba68
+STEP 44/48: COPY patch_torch_opaque.py /tmp/
+--> 1947330bf113
+STEP 45/48: RUN python3 /tmp/patch_torch_opaque.py
+OK: Patched /usr/local/lib/python3.12/dist-packages/vllm/utils/torch_utils.py — torch._opaque_base import made robust
+--> e2facf9ad912
+STEP 46/48: RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+--> 01773c241ae6
+STEP 47/48: COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+--> 449f49c5a09b
+STEP 48/48: RUN python3 -c "import vllm; print('vLLM:', vllm.__version__); import transformers; print('transformers:', transformers.__version__); import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); import vllm.config.compilation; src = open(vllm.config.compilation.__file__).read(); assert 'VLLM_UF_EAGER_ALLREDUCE' in src, 'UF17 patch missing!'; print('UF17: EAGER_ALLREDUCE patch verified'); import os; assert os.path.exists('/opt/vllm/serve_torchrun.py'); print('torchrun: serve_torchrun.py installed')"
+/usr/local/lib/python3.12/dist-packages/torchvision/io/image.py:14: UserWarning: Failed to load image Python extension: 'Could not load this library: /usr/local/lib/python3.12/dist-packages/torchvision/image.so'If you don't plan on using image functionality from `torchvision.io`, you can ignore this warning. Otherwise, there might be something wrong with your environment. Did you have `libjpeg` or `libpng` installed before building `torchvision` from source?
+  warn(
+vLLM: 0.17.1.dev0+gb31e9326a.d20260307
+transformers: 5.3.0
+compressed_tensors: 0.13.0
+PyTorch: 2.11.0a0+eb65b36914.nv26.02
+CUDA: 13.1
+INFO 03-07 20:46:28 [importing.py:44] Triton is installed but 0 active driver(s) found (expected 1). Disabling Triton to prevent runtime errors.
+INFO 03-07 20:46:28 [importing.py:68] Triton not installed or not compatible; certain GPU-related functions will not be available.
+UF17: EAGER_ALLREDUCE patch verified
+torchrun: serve_torchrun.py installed
+COMMIT vllm-ng17
+--> f636685abe50
+Successfully tagged localhost/vllm-ng17:latest
+f636685abe50817d27fe73a40fb6dcaf774e5722dab2cf5ea3201350cd29179a

@@ -1,0 +1,627 @@
+STEP 1/32: FROM nvcr.io/nvidia/vllm:26.02-py3
+STEP 2/32: RUN apt-get update -qq &&     apt-get install -y --no-install-recommends wget libibverbs-dev &&     ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so &&     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') &&     wget -qO /tmp/cuda-keyring.deb       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" &&     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb &&     apt-get update -qq &&     apt-get install -y --no-install-recommends       libcusparse-dev-13-1       libcusolver-dev-13-1       libcufft-dev-13-1 &&     rm -rf /var/lib/apt/lists/*
+Reading package lists...
+Building dependency tree...
+Reading state information...
+wget is already the newest version (1.21.4-1ubuntu4.1).
+libibverbs-dev is already the newest version (56.0-1).
+0 upgraded, 0 newly installed, 0 to remove and 32 not upgraded.
+Selecting previously unselected package cuda-keyring.
+(Reading database ... 18802 files and directories currently installed.)
+Preparing to unpack /tmp/cuda-keyring.deb ...
+Unpacking cuda-keyring (1.1-1) ...
+Setting up cuda-keyring (1.1-1) ...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+libcusparse-dev-13-1 is already the newest version (12.7.3.1-1).
+libcusolver-dev-13-1 is already the newest version (12.0.9.81-1).
+The following additional packages will be installed:
+  libcufft-13-1
+The following NEW packages will be installed:
+  libcufft-13-1 libcufft-dev-13-1
+0 upgraded, 2 newly installed, 0 to remove and 38 not upgraded.
+Need to get 378 MB of archives.
+After this operation, 603 MB of additional disk space will be used.
+Get:1 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa  libcufft-13-1 12.1.0.78-1 [189 MB]
+Get:2 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa  libcufft-dev-13-1 12.1.0.78-1 [189 MB]
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Teletype
+dpkg-preconfigure: unable to re-open stdin: 
+Fetched 378 MB in 44s (8543 kB/s)
+Selecting previously unselected package libcufft-13-1.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 18807 files and directories currently installed.)
+Preparing to unpack .../libcufft-13-1_12.1.0.78-1_arm64.deb ...
+Unpacking libcufft-13-1 (12.1.0.78-1) ...
+Selecting previously unselected package libcufft-dev-13-1.
+Preparing to unpack .../libcufft-dev-13-1_12.1.0.78-1_arm64.deb ...
+Unpacking libcufft-dev-13-1 (12.1.0.78-1) ...
+Setting up libcufft-13-1 (12.1.0.78-1) ...
+Setting up libcufft-dev-13-1 (12.1.0.78-1) ...
+--> be327c22bdc1
+STEP 3/32: RUN pip install --no-cache-dir cmake ninja setuptools-scm
+Requirement already satisfied: cmake in /usr/local/lib/python3.12/dist-packages (3.31.6)
+Requirement already satisfied: ninja in /usr/local/lib/python3.12/dist-packages (1.13.0)
+Requirement already satisfied: setuptools-scm in /usr/local/lib/python3.12/dist-packages (9.2.2)
+Requirement already satisfied: packaging>=20 in /usr/local/lib/python3.12/dist-packages (from setuptools-scm) (26.0)
+Requirement already satisfied: setuptools in /usr/local/lib/python3.12/dist-packages (from setuptools-scm) (80.10.2)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 108e78227714
+STEP 4/32: RUN git clone --depth 1 --branch v4.3.5       https://github.com/NVIDIA/cutlass.git /opt/cutlass
+Cloning into '/opt/cutlass'...
+Note: switching to '4faf1a1568cf1e4ad8ff71846a13e16f2a6a6f6b'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+--> d3917f747e8f
+STEP 5/32: ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+--> 98e6a987c32a
+STEP 6/32: RUN git clone --filter=blob:none       https://github.com/vllm-project/vllm.git /tmp/vllm-build &&     cd /tmp/vllm-build &&     git checkout 882682ab8
+Cloning into '/tmp/vllm-build'...
+Updating files:   0% (2/4162)Updating files:   1% (42/4162)Updating files:   2% (84/4162)Updating files:   3% (125/4162)Updating files:   4% (167/4162)Updating files:   5% (209/4162)Updating files:   6% (250/4162)Updating files:   7% (292/4162)Updating files:   8% (333/4162)Updating files:   9% (375/4162)Updating files:  10% (417/4162)Updating files:  11% (458/4162)Updating files:  12% (500/4162)Updating files:  13% (542/4162)Updating files:  14% (583/4162)Updating files:  15% (625/4162)Updating files:  16% (666/4162)Updating files:  17% (708/4162)Updating files:  18% (750/4162)Updating files:  19% (791/4162)Updating files:  20% (833/4162)Updating files:  21% (875/4162)Updating files:  22% (916/4162)Updating files:  23% (958/4162)Updating files:  24% (999/4162)Updating files:  25% (1041/4162)Updating files:  26% (1083/4162)Updating files:  27% (1124/4162)Updating files:  28% (1166/4162)Updating files:  29% (1207/4162)Updating files:  30% (1249/4162)Updating files:  31% (1291/4162)Updating files:  32% (1332/4162)Updating files:  33% (1374/4162)Updating files:  34% (1416/4162)Updating files:  35% (1457/4162)Updating files:  36% (1499/4162)Updating files:  37% (1540/4162)Updating files:  38% (1582/4162)Updating files:  39% (1624/4162)Updating files:  40% (1665/4162)Updating files:  41% (1707/4162)Updating files:  42% (1749/4162)Updating files:  43% (1790/4162)Updating files:  44% (1832/4162)Updating files:  45% (1873/4162)Updating files:  46% (1915/4162)Updating files:  47% (1957/4162)Updating files:  48% (1998/4162)Updating files:  49% (2040/4162)Updating files:  50% (2081/4162)Updating files:  51% (2123/4162)Updating files:  52% (2165/4162)Updating files:  53% (2206/4162)Updating files:  54% (2248/4162)Updating files:  55% (2290/4162)Updating files:  56% (2331/4162)Updating files:  57% (2373/4162)Updating files:  58% (2414/4162)Updating files:  59% (2456/4162)Updating files:  60% (2498/4162)Updating files:  61% (2539/4162)Updating files:  62% (2581/4162)Updating files:  63% (2623/4162)Updating files:  64% (2664/4162)Updating files:  65% (2706/4162)Updating files:  66% (2747/4162)Updating files:  67% (2789/4162)Updating files:  68% (2831/4162)Updating files:  69% (2872/4162)Updating files:  70% (2914/4162)Updating files:  71% (2956/4162)Updating files:  72% (2997/4162)Updating files:  73% (3039/4162)Updating files:  74% (3080/4162)Updating files:  75% (3122/4162)Updating files:  76% (3164/4162)Updating files:  77% (3205/4162)Updating files:  78% (3247/4162)Updating files:  79% (3288/4162)Updating files:  80% (3330/4162)Updating files:  81% (3372/4162)Updating files:  82% (3413/4162)Updating files:  83% (3455/4162)Updating files:  84% (3497/4162)Updating files:  85% (3538/4162)Updating files:  86% (3580/4162)Updating files:  87% (3621/4162)Updating files:  88% (3663/4162)Updating files:  89% (3705/4162)Updating files:  90% (3746/4162)Updating files:  91% (3788/4162)Updating files:  92% (3830/4162)Updating files:  93% (3871/4162)Updating files:  94% (3913/4162)Updating files:  95% (3954/4162)Updating files:  96% (3996/4162)Updating files:  97% (4038/4162)Updating files:  98% (4079/4162)Updating files:  99% (4121/4162)Updating files: 100% (4162/4162)Updating files: 100% (4162/4162), done.
+Note: switching to '882682ab8'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 882682ab8 p
+--> 5f98a9dd2f00
+STEP 7/32: WORKDIR /tmp/vllm-build
+--> 77f868c2b067
+STEP 8/32: COPY marlin_sm12x.patch /tmp/
+--> 062f186fbec1
+STEP 9/32: RUN git apply /tmp/marlin_sm12x.patch || echo "Patch already applied or not needed"
+--> 1bf99cebea2d
+STEP 10/32: RUN python use_existing_torch.py
+>>> removed from requirements/xpu.txt: --extra-index-url=https://download.pytorch.org/whl/xpu
+>>> removed from requirements/xpu.txt: torch==2.10.0+xpu
+>>> removed from requirements/xpu.txt: torchaudio
+>>> removed from requirements/xpu.txt: torchvision
+>>> removed from requirements/rocm-build.txt: --extra-index-url https://download.pytorch.org/whl/test/rocm7.0
+>>> removed from requirements/rocm-build.txt: torch==2.10.0
+>>> removed from requirements/rocm-build.txt: torchvision==0.25.0
+>>> removed from requirements/rocm-build.txt: torchaudio==2.10.0
+>>> removed from requirements/cuda.txt: torch==2.10.0
+>>> removed from requirements/cuda.txt: torchaudio==2.10.0
+>>> removed from requirements/cuda.txt: # These must be updated alongside torch
+>>> removed from requirements/cuda.txt: torchvision==0.25.0 # Required for phi3v processor. See https://github.com/pytorch/vision?tab=readme-ov-file#installation for corresponding version
+>>> removed from requirements/rocm-test.txt: terratorch @ git+https://github.com/IBM/terratorch.git@07184fcf91a1324f831ff521dd238d97fe350e3e
+>>> removed from requirements/rocm-test.txt: torchgeo==0.7.0
+>>> removed from requirements/rocm-test.txt: # via terratorch
+>>> removed from requirements/rocm-test.txt: open-clip-torch==2.32.0
+>>> removed from requirements/test.txt: #    uv pip compile requirements/test.in -o requirements/test.txt --index-strategy unsafe-best-match --torch-backend cu129 --python-platform x86_64-manylinux_2_28 --python-version 3.12
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: efficientnet-pytorch==0.7.1
+>>> removed from requirements/test.txt: # via segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   vector-quantize-pytorch
+>>> removed from requirements/test.txt: # via vector-quantize-pytorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via open-clip-torch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: open-clip-torch==2.32.0
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: # via segmentation-models-pytorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: pytorch-lightning==2.5.2
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: # via torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: segmentation-models-pytorch==0.4.0
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: terratorch @ git+https://github.com/IBM/terratorch.git@07184fcf91a1324f831ff521dd238d97fe350e3e
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: torch==2.10.0+cu129
+>>> removed from requirements/test.txt: #   efficientnet-pytorch
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchaudio
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   torchmetrics
+>>> removed from requirements/test.txt: #   torchvision
+>>> removed from requirements/test.txt: #   vector-quantize-pytorch
+>>> removed from requirements/test.txt: torchaudio==2.10.0+cu129
+>>> removed from requirements/test.txt: torchgeo==0.7.0
+>>> removed from requirements/test.txt: # via terratorch
+>>> removed from requirements/test.txt: torchmetrics==1.7.4
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: torchvision==0.25.0+cu129
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: #   terratorch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: #   open-clip-torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   segmentation-models-pytorch
+>>> removed from requirements/test.txt: # via torch
+>>> removed from requirements/test.txt: #   pytorch-lightning
+>>> removed from requirements/test.txt: #   torch
+>>> removed from requirements/test.txt: #   torchgeo
+>>> removed from requirements/test.txt: vector-quantize-pytorch==1.21.2
+>>> removed from requirements/cpu.txt: torch==2.10.0+cpu; platform_machine == "x86_64" or platform_machine == "s390x"
+>>> removed from requirements/cpu.txt: torch==2.10.0; platform_machine == "aarch64" or platform_system == "Darwin" or platform_machine == "ppc64le"
+>>> removed from requirements/cpu.txt: # required for the image processor of minicpm-o-2_6, this must be updated alongside torch
+>>> removed from requirements/cpu.txt: torchaudio; platform_machine != "s390x"
+>>> removed from requirements/cpu.txt: # required for the image processor of phi3v, this must be updated alongside torch
+>>> removed from requirements/cpu.txt: torchvision; platform_machine != "s390x"
+>>> removed from requirements/cpu.txt: # Intel Extension for PyTorch, only for x86_64 CPUs
+>>> removed from requirements/build.txt: torch==2.10.0
+>>> removed from requirements/cpu-build.txt: torch==2.10.0+cpu; platform_machine == "x86_64" or platform_machine == "s390x"
+>>> removed from requirements/cpu-build.txt: torch==2.10.0; platform_machine == "aarch64" or platform_system == "Darwin" or platform_machine == "ppc64le"
+>>> removed from requirements/test.in: vector_quantize_pytorch # required for minicpmo_26 test
+>>> removed from requirements/test.in: torch==2.10.0
+>>> removed from requirements/test.in: torchaudio==2.10.0
+>>> removed from requirements/test.in: torchvision==0.25.0
+>>> removed from requirements/test.in: open_clip_torch==2.32.0 # Required for nemotron_vl test, Nemotron Parse in test_common.py
+>>> removed from requirements/test.in: terratorch @ git+https://github.com/IBM/terratorch.git@1.1.rc3 # required for PrithviMAE test
+>>> removed from pyproject.toml: "torch == 2.10.0",
+>>> removed from pyproject.toml: no-build-isolation-package = ["torch"]
+--> 2b1b5c013012
+STEP 11/32: RUN pip install --no-cache-dir -r requirements/build.txt
+Requirement already satisfied: cmake>=3.26.1 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 2)) (3.31.6)
+Requirement already satisfied: ninja in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 3)) (1.13.0)
+Requirement already satisfied: packaging>=24.2 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 4)) (26.0)
+Requirement already satisfied: setuptools<81.0.0,>=77.0.3 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 5)) (80.10.2)
+Requirement already satisfied: setuptools-scm>=8 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 6)) (9.2.2)
+Requirement already satisfied: wheel in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 7)) (0.46.3)
+Requirement already satisfied: jinja2>=3.1.6 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 8)) (3.1.6)
+Requirement already satisfied: regex in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 9)) (2026.2.19)
+Collecting build (from -r requirements/build.txt (line 10))
+  Downloading build-1.4.0-py3-none-any.whl.metadata (5.8 kB)
+Requirement already satisfied: protobuf!=6.30.*,!=6.31.*,!=6.32.*,!=6.33.0.*,!=6.33.1.*,!=6.33.2.*,!=6.33.3.*,!=6.33.4.*,>=5.29.6 in /usr/local/lib/python3.12/dist-packages (from -r requirements/build.txt (line 11)) (6.33.5)
+Collecting grpcio-tools==1.78.0 (from -r requirements/build.txt (line 12))
+  Downloading grpcio_tools-1.78.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl.metadata (5.3 kB)
+Requirement already satisfied: grpcio>=1.78.0 in /usr/local/lib/python3.12/dist-packages (from grpcio-tools==1.78.0->-r requirements/build.txt (line 12)) (1.78.1)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2>=3.1.6->-r requirements/build.txt (line 8)) (3.0.3)
+Collecting pyproject_hooks (from build->-r requirements/build.txt (line 10))
+  Downloading pyproject_hooks-1.2.0-py3-none-any.whl.metadata (1.3 kB)
+Requirement already satisfied: typing-extensions~=4.12 in /usr/local/lib/python3.12/dist-packages (from grpcio>=1.78.0->grpcio-tools==1.78.0->-r requirements/build.txt (line 12)) (4.15.0)
+Downloading grpcio_tools-1.78.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl (2.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.6/2.6 MB 7.3 MB/s  0:00:00
+Downloading build-1.4.0-py3-none-any.whl (24 kB)
+Downloading pyproject_hooks-1.2.0-py3-none-any.whl (10 kB)
+Installing collected packages: pyproject_hooks, grpcio-tools, build
+
+Successfully installed build-1.4.0 grpcio-tools-1.78.0 pyproject_hooks-1.2.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 8bb5d13cc190
+STEP 12/32: RUN pip uninstall -y vllm
+Found existing installation: vllm 0.15.1+nv26.2
+Uninstalling vllm-0.15.1+nv26.2:
+  Successfully uninstalled vllm-0.15.1+nv26.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 352bcfdcaa1a
+STEP 13/32: ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+--> e392f277b90f
+STEP 14/32: ENV VLLM_TARGET_DEVICE=cuda
+--> 981924521a2e
+STEP 15/32: ENV MAX_JOBS=16
+--> b5e30b67a6ae
+STEP 16/32: RUN pip install --no-build-isolation --no-cache-dir .
+Processing ./.
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: regex in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2026.2.19)
+Requirement already satisfied: cachetools in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (7.0.1)
+Requirement already satisfied: psutil in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (7.2.2)
+Requirement already satisfied: sentencepiece in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.2.1)
+Requirement already satisfied: numpy in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.1.0)
+Requirement already satisfied: requests>=2.26.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.32.5)
+Requirement already satisfied: tqdm in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.67.3)
+Requirement already satisfied: blake3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.0.8)
+Requirement already satisfied: py-cpuinfo in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (9.0.0)
+Collecting transformers @ git+https://github.com/huggingface/transformers.git@main (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Cloning https://github.com/huggingface/transformers.git (to revision main) to /tmp/pip-install-3qlggaj0/transformers_5ccee777ca7c4ea49834e808e1cdd6b1
+  Running command git clone --filter=blob:none --quiet https://github.com/huggingface/transformers.git /tmp/pip-install-3qlggaj0/transformers_5ccee777ca7c4ea49834e808e1cdd6b1
+  Resolved https://github.com/huggingface/transformers.git to commit 30c480166a95342fefdd9d727fc2a163bea7b2b1
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: tokenizers>=0.21.1 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.22.2)
+Requirement already satisfied: protobuf!=6.30.*,!=6.31.*,!=6.32.*,!=6.33.0.*,!=6.33.1.*,!=6.33.2.*,!=6.33.3.*,!=6.33.4.*,>=5.29.6 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (6.33.5)
+Requirement already satisfied: fastapi>=0.115.0 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.129.0)
+Requirement already satisfied: aiohttp>=3.13.3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.13.3)
+Requirement already satisfied: openai>=1.99.1 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.21.0)
+Requirement already satisfied: pydantic>=2.12.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.12.5)
+Requirement already satisfied: prometheus_client>=0.18.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.24.1)
+Requirement already satisfied: pillow in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (12.1.1)
+Requirement already satisfied: prometheus-fastapi-instrumentator>=7.0.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (7.1.0)
+Requirement already satisfied: tiktoken>=0.6.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.12.0)
+Requirement already satisfied: lm-format-enforcer==0.11.3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.11.3)
+Requirement already satisfied: llguidance<1.4.0,>=1.3.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.3.0)
+Requirement already satisfied: outlines_core==0.2.11 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.2.11)
+Requirement already satisfied: diskcache==5.6.3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (5.6.3)
+Requirement already satisfied: lark==1.2.2 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.2.2)
+Collecting xgrammar==0.1.29 (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading xgrammar-0.1.29-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl.metadata (6.8 kB)
+Requirement already satisfied: typing_extensions>=4.10 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.15.0)
+Requirement already satisfied: filelock>=3.16.1 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.24.3)
+Requirement already satisfied: partial-json-parser in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.2.1.1.post7)
+Requirement already satisfied: pyzmq>=25.0.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (27.1.0)
+Requirement already satisfied: msgspec in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.20.0)
+Requirement already satisfied: gguf>=0.17.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.17.1)
+Requirement already satisfied: mistral_common>=1.9.0 in /usr/local/lib/python3.12/dist-packages (from mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.9.1)
+Requirement already satisfied: opencv-python-headless>=4.13.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.13.0.92)
+Requirement already satisfied: pyyaml in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (6.0.3)
+Requirement already satisfied: six>=1.16.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.16.0)
+Requirement already satisfied: setuptools<81.0.0,>=77.0.3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (80.10.2)
+Requirement already satisfied: einops in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.8.2)
+Requirement already satisfied: compressed-tensors==0.13.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.13.0)
+Requirement already satisfied: depyf==0.20.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.20.0)
+Requirement already satisfied: cloudpickle in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.1.2)
+Requirement already satisfied: watchfiles in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.1.1)
+Requirement already satisfied: python-json-logger in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.0.0)
+Requirement already satisfied: ninja in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.13.0)
+Requirement already satisfied: pybase64 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.4.3)
+Requirement already satisfied: cbor2 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (5.8.0)
+Requirement already satisfied: ijson in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.4.0.post0)
+Requirement already satisfied: setproctitle in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.3.7)
+Requirement already satisfied: openai-harmony>=0.0.3 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.0.8)
+Requirement already satisfied: anthropic>=0.71.0 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.83.0)
+Requirement already satisfied: model-hosting-container-standards<1.0.0,>=0.1.13 in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.1.13)
+Requirement already satisfied: mcp in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.26.0)
+Requirement already satisfied: grpcio in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.78.1)
+Requirement already satisfied: grpcio-reflection in /usr/local/lib/python3.12/dist-packages (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.78.1)
+Collecting numba==0.61.2 (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading numba-0.61.2-cp312-cp312-manylinux_2_28_aarch64.whl.metadata (2.8 kB)
+Requirement already satisfied: ray>=2.48.0 in /usr/local/lib/python3.12/dist-packages (from ray[cgraph]>=2.48.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.54.0)
+Collecting flashinfer-python==0.6.3 (from vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading flashinfer_python-0.6.3-py3-none-any.whl.metadata (10 kB)
+Collecting huggingface-hub<2.0,>=1.3.0 (from transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading huggingface_hub-1.5.0-py3-none-any.whl.metadata (13 kB)
+Requirement already satisfied: packaging>=20.0 in /usr/local/lib/python3.12/dist-packages (from transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (26.0)
+Requirement already satisfied: typer in /usr/local/lib/python3.12/dist-packages (from transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.24.0)
+Requirement already satisfied: safetensors>=0.4.3 in /usr/local/lib/python3.12/dist-packages (from transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.7.0)
+Requirement already satisfied: torch>=1.7.0 in /usr/local/lib/python3.12/dist-packages (from compressed-tensors==0.13.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.11.0a0+eb65b36914.nv26.2)
+Requirement already satisfied: loguru in /usr/local/lib/python3.12/dist-packages (from compressed-tensors==0.13.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.7.3)
+Requirement already satisfied: astor in /usr/local/lib/python3.12/dist-packages (from depyf==0.20.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.8.1)
+Requirement already satisfied: dill in /usr/local/lib/python3.12/dist-packages (from depyf==0.20.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.4.1)
+Requirement already satisfied: apache-tvm-ffi!=0.1.8,!=0.1.8.post0,<0.2,>=0.1.6 in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.1.7)
+Requirement already satisfied: click in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (8.3.1)
+Requirement already satisfied: nvidia-cudnn-frontend>=1.13.0 in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.18.0)
+Requirement already satisfied: nvidia-cutlass-dsl>=4.3.4 in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.3.5)
+Requirement already satisfied: nvidia-ml-py in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (13.590.48)
+Requirement already satisfied: tabulate in /usr/local/lib/python3.12/dist-packages (from flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.9.0)
+Requirement already satisfied: interegular>=0.3.2 in /usr/local/lib/python3.12/dist-packages (from lm-format-enforcer==0.11.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.3.3)
+Collecting llvmlite<0.45,>=0.44.0dev0 (from numba==0.61.2->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading llvmlite-0.44.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl.metadata (5.0 kB)
+Requirement already satisfied: fsspec>=2023.5.0 in /usr/local/lib/python3.12/dist-packages (from huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2026.2.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.2.0 in /usr/local/lib/python3.12/dist-packages (from huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.2.0)
+Requirement already satisfied: httpx<1,>=0.23.0 in /usr/local/lib/python3.12/dist-packages (from huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.28.1)
+Requirement already satisfied: anyio in /usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.12.1)
+Requirement already satisfied: certifi in /usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2026.1.4)
+Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.0.9)
+Requirement already satisfied: idna in /usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.11)
+Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.12/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.3.0->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.16.0)
+Requirement already satisfied: jmespath in /usr/local/lib/python3.12/dist-packages (from model-hosting-container-standards<1.0.0,>=0.1.13->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.1.0)
+Requirement already satisfied: starlette>=0.49.1 in /usr/local/lib/python3.12/dist-packages (from model-hosting-container-standards<1.0.0,>=0.1.13->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.52.1)
+Requirement already satisfied: supervisor>=4.2.0 in /usr/local/lib/python3.12/dist-packages (from model-hosting-container-standards<1.0.0,>=0.1.13->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.3.0)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.4.0)
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (25.4.0)
+Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (6.7.1)
+Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.12/dist-packages (from aiohttp>=3.13.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.22.0)
+Requirement already satisfied: distro<2,>=1.7.0 in /usr/local/lib/python3.12/dist-packages (from anthropic>=0.71.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.9.0)
+Requirement already satisfied: docstring-parser<1,>=0.15 in /usr/local/lib/python3.12/dist-packages (from anthropic>=0.71.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.17.0)
+Requirement already satisfied: jiter<1,>=0.4.0 in /usr/local/lib/python3.12/dist-packages (from anthropic>=0.71.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.13.0)
+Requirement already satisfied: sniffio in /usr/local/lib/python3.12/dist-packages (from anthropic>=0.71.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.3.1)
+Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.12/dist-packages (from pydantic>=2.12.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.7.0)
+Requirement already satisfied: pydantic-core==2.41.5 in /usr/local/lib/python3.12/dist-packages (from pydantic>=2.12.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.41.5)
+Requirement already satisfied: typing-inspection>=0.4.2 in /usr/local/lib/python3.12/dist-packages (from pydantic>=2.12.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.4.2)
+Requirement already satisfied: annotated-doc>=0.0.2 in /usr/local/lib/python3.12/dist-packages (from fastapi>=0.115.0->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.0.4)
+Requirement already satisfied: fastapi-cli>=0.0.8 in /usr/local/lib/python3.12/dist-packages (from fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.0.23)
+Requirement already satisfied: jinja2>=3.1.5 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.1.6)
+Requirement already satisfied: python-multipart>=0.0.18 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.0.22)
+Requirement already satisfied: email-validator>=2.0.0 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.3.0)
+Requirement already satisfied: uvicorn>=0.12.0 in /usr/local/lib/python3.12/dist-packages (from uvicorn[standard]>=0.12.0; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.41.0)
+Requirement already satisfied: pydantic-settings>=2.0.0 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.13.1)
+Requirement already satisfied: pydantic-extra-types>=2.0.0 in /usr/local/lib/python3.12/dist-packages (from fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.11.0)
+Requirement already satisfied: dnspython>=2.0.0 in /usr/local/lib/python3.12/dist-packages (from email-validator>=2.0.0->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.8.0)
+Requirement already satisfied: rich-toolkit>=0.14.8 in /usr/local/lib/python3.12/dist-packages (from fastapi-cli>=0.0.8->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.19.4)
+Requirement already satisfied: fastapi-cloud-cli>=0.1.1 in /usr/local/lib/python3.12/dist-packages (from fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.13.0)
+Requirement already satisfied: rignore>=0.5.1 in /usr/local/lib/python3.12/dist-packages (from fastapi-cloud-cli>=0.1.1->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.7.6)
+Requirement already satisfied: sentry-sdk>=2.20.0 in /usr/local/lib/python3.12/dist-packages (from fastapi-cloud-cli>=0.1.1->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.53.0)
+Requirement already satisfied: fastar>=0.8.0 in /usr/local/lib/python3.12/dist-packages (from fastapi-cloud-cli>=0.1.1->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.8.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2>=3.1.5->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.0.3)
+Requirement already satisfied: jsonschema>=4.21.1 in /usr/local/lib/python3.12/dist-packages (from mistral_common>=1.9.0->mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.26.0)
+Requirement already satisfied: jsonschema-specifications>=2023.03.6 in /usr/local/lib/python3.12/dist-packages (from jsonschema>=4.21.1->mistral_common>=1.9.0->mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2025.9.1)
+Requirement already satisfied: referencing>=0.28.4 in /usr/local/lib/python3.12/dist-packages (from jsonschema>=4.21.1->mistral_common>=1.9.0->mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.37.0)
+Requirement already satisfied: rpds-py>=0.25.0 in /usr/local/lib/python3.12/dist-packages (from jsonschema>=4.21.1->mistral_common>=1.9.0->mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.30.0)
+Requirement already satisfied: cuda-python>=12.8 in /usr/local/lib/python3.12/dist-packages (from nvidia-cutlass-dsl>=4.3.4->flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (13.1.1)
+Requirement already satisfied: cuda-bindings~=13.1.1 in /usr/local/lib/python3.12/dist-packages (from cuda-python>=12.8->nvidia-cutlass-dsl>=4.3.4->flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (13.1.1)
+Requirement already satisfied: cuda-pathfinder~=1.1 in /usr/local/lib/python3.12/dist-packages (from cuda-python>=12.8->nvidia-cutlass-dsl>=4.3.4->flashinfer-python==0.6.3->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.3.4)
+Requirement already satisfied: pycountry>=23 in /usr/local/lib/python3.12/dist-packages (from pydantic-extra-types[pycountry]>=2.10.5->mistral_common>=1.9.0->mistral_common[image]>=1.9.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (26.2.16)
+Requirement already satisfied: python-dotenv>=0.21.0 in /usr/local/lib/python3.12/dist-packages (from pydantic-settings>=2.0.0->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.2.1)
+Requirement already satisfied: msgpack<2.0.0,>=1.0.0 in /usr/local/lib/python3.12/dist-packages (from ray>=2.48.0->ray[cgraph]>=2.48.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.1.2)
+Collecting cupy-cuda12x (from ray[cgraph]>=2.48.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131)
+  Downloading cupy_cuda12x-14.0.1-cp312-cp312-manylinux2014_aarch64.whl.metadata (2.8 kB)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests>=2.26.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests>=2.26.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.6.3)
+Requirement already satisfied: rich>=13.7.1 in /usr/local/lib/python3.12/dist-packages (from rich-toolkit>=0.14.8->fastapi-cli>=0.0.8->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (14.3.3)
+Requirement already satisfied: markdown-it-py>=2.2.0 in /usr/local/lib/python3.12/dist-packages (from rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.8->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (4.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in /usr/local/lib/python3.12/dist-packages (from rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.8->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.19.2)
+Requirement already satisfied: mdurl~=0.1 in /usr/local/lib/python3.12/dist-packages (from markdown-it-py>=2.2.0->rich>=13.7.1->rich-toolkit>=0.14.8->fastapi-cli>=0.0.8->fastapi-cli[standard]>=0.0.8; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.1.2)
+Requirement already satisfied: sympy>=1.13.3 in /usr/local/lib/python3.12/dist-packages (from torch>=1.7.0->compressed-tensors==0.13.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in /usr/local/lib/python3.12/dist-packages (from torch>=1.7.0->compressed-tensors==0.13.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.6.1)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from sympy>=1.13.3->torch>=1.7.0->compressed-tensors==0.13.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.3.0)
+Requirement already satisfied: shellingham>=1.3.0 in /usr/local/lib/python3.12/dist-packages (from typer->transformers @ git+https://github.com/huggingface/transformers.git@main->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (1.5.4)
+Requirement already satisfied: httptools>=0.6.3 in /usr/local/lib/python3.12/dist-packages (from uvicorn[standard]>=0.12.0; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.7.1)
+Requirement already satisfied: uvloop>=0.15.1 in /usr/local/lib/python3.12/dist-packages (from uvicorn[standard]>=0.12.0; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.22.1)
+Requirement already satisfied: websockets>=10.4 in /usr/local/lib/python3.12/dist-packages (from uvicorn[standard]>=0.12.0; extra == "standard"->fastapi[standard]>=0.115.0->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (16.0)
+Requirement already satisfied: httpx-sse>=0.4 in /usr/local/lib/python3.12/dist-packages (from mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (0.4.3)
+Requirement already satisfied: pyjwt>=2.10.1 in /usr/local/lib/python3.12/dist-packages (from pyjwt[crypto]>=2.10.1->mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.11.0)
+Requirement already satisfied: sse-starlette>=1.6.1 in /usr/local/lib/python3.12/dist-packages (from mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.2.0)
+Requirement already satisfied: cryptography>=3.4.0 in /usr/local/lib/python3.12/dist-packages (from pyjwt[crypto]>=2.10.1->mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (46.0.5)
+Requirement already satisfied: cffi>=2.0.0 in /usr/local/lib/python3.12/dist-packages (from cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (2.0.0)
+Requirement already satisfied: pycparser in /usr/local/lib/python3.12/dist-packages (from cffi>=2.0.0->cryptography>=3.4.0->pyjwt[crypto]>=2.10.1->mcp->vllm==0.16.0rc2.dev123+g882682ab8.d20260304.cu131) (3.0)
+Downloading flashinfer_python-0.6.3-py3-none-any.whl (7.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.6/7.6 MB 7.8 MB/s  0:00:01
+Downloading numba-0.61.2-cp312-cp312-manylinux_2_28_aarch64.whl (3.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 9.9 MB/s  0:00:00
+Downloading xgrammar-0.1.29-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl (34.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 34.7/34.7 MB 9.6 MB/s  0:00:03
+Downloading huggingface_hub-1.5.0-py3-none-any.whl (596 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 596.3/596.3 kB 9.0 MB/s  0:00:00
+Downloading llvmlite-0.44.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl (41.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 41.2/41.2 MB 9.0 MB/s  0:00:04
+Downloading cupy_cuda12x-14.0.1-cp312-cp312-manylinux2014_aarch64.whl (145.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 145.6/145.6 MB 9.6 MB/s  0:00:15
+Building wheels for collected packages: vllm, transformers
+  Building wheel for vllm (pyproject.toml): started
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): still running...
+  Building wheel for vllm (pyproject.toml): finished with status 'done'
+  Created wheel for vllm: filename=vllm-0.16.0rc2.dev123+g882682ab8.d20260304.cu131-cp312-cp312-linux_aarch64.whl size=592492478 sha256=012f94bc473053d9ce265bd89a8dce2fe03d3c2318b142fea30d0407e19b4773
+  Stored in directory: /tmp/pip-ephem-wheel-cache-5hdfapta/wheels/37/2d/0c/8dcdb7b3dce69ecb3beec08df7a7e444addad8422778a67b03
+  Building wheel for transformers (pyproject.toml): started
+  Building wheel for transformers (pyproject.toml): finished with status 'done'
+  Created wheel for transformers: filename=transformers-5.3.0.dev0-py3-none-any.whl size=11746865 sha256=19fa8eaae657be0d98daa1d1bde4e386e2664cfebda2e2dbd40594fdf93cdf2d
+  Stored in directory: /tmp/pip-ephem-wheel-cache-5hdfapta/wheels/12/51/df/b62c8ce0479c5de6f7bef121169b3e946949a57481169d3155
+Successfully built vllm transformers
+Installing collected packages: llvmlite, cupy-cuda12x, numba, huggingface-hub, flashinfer-python, transformers, xgrammar, vllm
+  Attempting uninstall: llvmlite
+    Found existing installation: llvmlite 0.46.0
+    Uninstalling llvmlite-0.46.0:
+      Successfully uninstalled llvmlite-0.46.0
+  Attempting uninstall: numba
+    Found existing installation: numba 0.64.0
+    Uninstalling numba-0.64.0:
+      Successfully uninstalled numba-0.64.0
+  Attempting uninstall: huggingface-hub
+    Found existing installation: huggingface_hub 0.36.2
+    Uninstalling huggingface_hub-0.36.2:
+      Successfully uninstalled huggingface_hub-0.36.2
+  Attempting uninstall: flashinfer-python
+    Found existing installation: flashinfer-python 0.6.1+34de48ea.nv26.2.cu131.44266235
+    Uninstalling flashinfer-python-0.6.1+34de48ea.nv26.2.cu131.44266235:
+      Successfully uninstalled flashinfer-python-0.6.1+34de48ea.nv26.2.cu131.44266235
+  Attempting uninstall: transformers
+    Found existing installation: transformers 4.57.5
+    Uninstalling transformers-4.57.5:
+      Successfully uninstalled transformers-4.57.5
+  Attempting uninstall: xgrammar
+    Found existing installation: xgrammar 0.1.27
+    Uninstalling xgrammar-0.1.27:
+      Successfully uninstalled xgrammar-0.1.27
+
+Successfully installed cupy-cuda12x-14.0.1 flashinfer-python-0.6.3 huggingface-hub-1.5.0 llvmlite-0.44.0 numba-0.61.2 transformers-5.3.0.dev0 vllm-0.16.0rc2.dev123+g882682ab8.d20260304.cu131 xgrammar-0.1.29
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 27b05f5b446c
+STEP 17/32: WORKDIR /
+--> 4d08ce9f8ab4
+STEP 18/32: RUN rm -rf /tmp/vllm-build
+--> 41d7cb0aedc5
+STEP 19/32: RUN pip install --no-cache-dir --no-deps "transformers>=5.2" &&     pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" &&     pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+Requirement already satisfied: transformers>=5.2 in ./usr/local/lib/python3.12/dist-packages (5.3.0.dev0)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+Requirement already satisfied: huggingface_hub>=0.32 in ./usr/local/lib/python3.12/dist-packages (1.5.0)
+Requirement already satisfied: filelock>=3.10.0 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (3.24.3)
+Requirement already satisfied: fsspec>=2023.5.0 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (2026.2.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.2.0 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (1.2.0)
+Requirement already satisfied: httpx<1,>=0.23.0 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (0.28.1)
+Requirement already satisfied: packaging>=20.9 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (26.0)
+Requirement already satisfied: pyyaml>=5.1 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (6.0.3)
+Requirement already satisfied: tqdm>=4.42.1 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (4.67.3)
+Requirement already satisfied: typer in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (0.24.0)
+Requirement already satisfied: typing-extensions>=4.1.0 in ./usr/local/lib/python3.12/dist-packages (from huggingface_hub>=0.32) (4.15.0)
+Requirement already satisfied: anyio in ./usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface_hub>=0.32) (4.12.1)
+Requirement already satisfied: certifi in ./usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface_hub>=0.32) (2026.1.4)
+Requirement already satisfied: httpcore==1.* in ./usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface_hub>=0.32) (1.0.9)
+Requirement already satisfied: idna in ./usr/local/lib/python3.12/dist-packages (from httpx<1,>=0.23.0->huggingface_hub>=0.32) (3.11)
+Requirement already satisfied: h11>=0.16 in ./usr/local/lib/python3.12/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->huggingface_hub>=0.32) (0.16.0)
+Requirement already satisfied: click>=8.2.1 in ./usr/local/lib/python3.12/dist-packages (from typer->huggingface_hub>=0.32) (8.3.1)
+Requirement already satisfied: shellingham>=1.3.0 in ./usr/local/lib/python3.12/dist-packages (from typer->huggingface_hub>=0.32) (1.5.4)
+Requirement already satisfied: rich>=12.3.0 in ./usr/local/lib/python3.12/dist-packages (from typer->huggingface_hub>=0.32) (14.3.3)
+Requirement already satisfied: annotated-doc>=0.0.2 in ./usr/local/lib/python3.12/dist-packages (from typer->huggingface_hub>=0.32) (0.0.4)
+Requirement already satisfied: markdown-it-py>=2.2.0 in ./usr/local/lib/python3.12/dist-packages (from rich>=12.3.0->typer->huggingface_hub>=0.32) (4.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in ./usr/local/lib/python3.12/dist-packages (from rich>=12.3.0->typer->huggingface_hub>=0.32) (2.19.2)
+Requirement already satisfied: mdurl~=0.1 in ./usr/local/lib/python3.12/dist-packages (from markdown-it-py>=2.2.0->rich>=12.3.0->typer->huggingface_hub>=0.32) (0.1.2)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+Requirement already satisfied: compressed-tensors>=0.13 in ./usr/local/lib/python3.12/dist-packages (0.13.0)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+--> 7786685ef11e
+STEP 20/32: COPY patch_transformers.py /tmp/
+--> 50d986bbe189
+STEP 21/32: RUN python3 /tmp/patch_transformers.py
+Found vllm installations: ['/usr/local/lib/python3.12/dist-packages/vllm', '/opt/vllm/vllm-src/vllm']
+Patch 3: compressed_tensors extra=ignore in: transform/transform_args.py, transform/transform_config.py, transform/transform_scheme.py, quantization/quant_scheme.py, quantization/quant_config.py, quantization/quant_args.py
+Patch 4: MoE fallback in /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/compressed_tensors/utils.py
+Patch 4: MoE fallback in /opt/vllm/vllm-src/vllm/model_executor/layers/quantization/compressed_tensors/utils.py
+Patch 7: AutoWeightsLoader buffer support in /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/utils.py
+Patch 7: AutoWeightsLoader buffer support in /opt/vllm/vllm-src/vllm/model_executor/models/utils.py
+Patch 8: e_score_correction_bias + MTP ignore in /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/transformers/moe.py (0.12 pattern)
+Patch 8: e_score_correction_bias + MTP ignore in /opt/vllm/vllm-src/vllm/model_executor/models/transformers/moe.py (0.12 pattern)
+Patch 11: Anthropic streaming tool_calls fix in /usr/local/lib/python3.12/dist-packages/vllm/entrypoints/anthropic/serving.py
+Patch 11: Anthropic streaming tool_calls fix in /opt/vllm/vllm-src/vllm/entrypoints/anthropic/serving.py
+Patch 5: .pyc caches cleared (all locations)
+--> 951f31cf5b46
+STEP 22/32: COPY patch_streaming.py /tmp/
+--> 24bc02f4d1a7
+STEP 23/32: RUN python3 /tmp/patch_streaming.py
+Fix 0: Already present
+Fix 1: Already applied
+Fix 2: input_json_delta emitted for single-chunk tool calls
+PATCHED successfully!
+--> 9112495d6e1a
+STEP 24/32: COPY patch_mtp_nvfp4_exclusion.py /tmp/
+--> 6973bb1ce33c
+STEP 25/32: RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
+======================================================================
+MTP NVFP4 Exclusion Patch
+======================================================================
+Target: /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py
+Patched /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/quantization/modelopt.py: ALL MTP layers now excluded from NVFP4
+
+MTP layers (mtp.fc, mtp.norm, mtp.layers.*) will now be
+excluded from NVFP4 quantization, keeping them in BF16.
+
+Usage: --speculative-config '{"method":"mtp","num_speculative_tokens":1}'
+======================================================================
+--> f5a91b3ea99f
+STEP 26/32: COPY patch_uf17_eager_allreduce.py /tmp/
+--> 0548be5248be
+STEP 27/32: RUN python3 /tmp/patch_uf17_eager_allreduce.py
+WARNING: Could not find all_reduce dispatch block, trying flexible match
+UF17v3: Patched parallel_state.py — all_reduce_with_output registered + dispatch added
+UF17v3: Added 'import os' after 'import enum'
+UF17v3: Patched compilation.py — EAGER_ALLREDUCE with zero-copy op
+UF17v3: Done
+--> b8de70fa1a18
+STEP 28/32: RUN mkdir -p /opt/vllm
+--> 17bd7b7a2285
+STEP 29/32: COPY serve_torchrun.py /opt/vllm/serve_torchrun.py
+--> ba39b5f9d2c9
+STEP 30/32: RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+--> e269b719b7d5
+STEP 31/32: COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+--> 0e3494ac24f2
+STEP 32/32: RUN python3 -c "import vllm; print('vLLM:', vllm.__version__); import transformers; print('transformers:', transformers.__version__); import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); import vllm.config.compilation; src = open(vllm.config.compilation.__file__).read(); assert 'VLLM_UF_EAGER_ALLREDUCE' in src, 'UF17 patch missing!'; print('UF17: EAGER_ALLREDUCE patch verified'); import os; assert os.path.exists('/opt/vllm/serve_torchrun.py'); print('torchrun: serve_torchrun.py installed')"
+/usr/local/lib/python3.12/dist-packages/torchvision/io/image.py:14: UserWarning: Failed to load image Python extension: 'Could not load this library: /usr/local/lib/python3.12/dist-packages/torchvision/image.so'If you don't plan on using image functionality from `torchvision.io`, you can ignore this warning. Otherwise, there might be something wrong with your environment. Did you have `libjpeg` or `libpng` installed before building `torchvision` from source?
+  warn(
+vLLM: 0.16.0rc2.dev123+g882682ab8.d20260304
+transformers: 5.3.0.dev0
+compressed_tensors: 0.13.0
+PyTorch: 2.11.0a0+eb65b36914.nv26.02
+CUDA: 13.1
+INFO 03-04 15:35:33 [importing.py:44] Triton is installed but 0 active driver(s) found (expected 1). Disabling Triton to prevent runtime errors.
+INFO 03-04 15:35:33 [importing.py:68] Triton not installed or not compatible; certain GPU-related functions will not be available.
+UF17: EAGER_ALLREDUCE patch verified
+torchrun: serve_torchrun.py installed
+COMMIT vllm-ng16
+--> bb082fa829da
+Successfully tagged localhost/vllm-ng16:latest
+bb082fa829da367d354beabf1cc496c18ca5f818a44d6983ab87e0dbad7a088b

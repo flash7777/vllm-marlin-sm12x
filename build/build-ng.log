@@ -1,0 +1,150 @@
+STEP 1/38: FROM nvcr.io/nvidia/vllm:26.01-py3
+STEP 2/38: RUN apt-get update -qq &&     apt-get install -y --no-install-recommends wget libibverbs-dev &&     ln -sf libibverbs.so.1 /usr/lib/aarch64-linux-gnu/libibverbs.so &&     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') &&     wget -qO /tmp/cuda-keyring.deb       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" &&     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb &&     apt-get update -qq &&     apt-get install -y --no-install-recommends       libcusparse-dev-13-1       libcusolver-dev-13-1       libcufft-dev-13-1 &&     rm -rf /var/lib/apt/lists/*
+--> Using cache 477cbf4ab29c0135a2c1cb430704be43b7945609f3f9e8fd9488b7766fc6e57b
+--> 477cbf4ab29c
+STEP 3/38: RUN pip install --no-cache-dir cmake ninja setuptools-scm
+--> Using cache a096ffb13305d8f2e4c15277e6cae3e2953f93f4eaa410a2cebcda247c2b5930
+--> a096ffb13305
+STEP 4/38: RUN git clone --depth 1 --branch v4.3.5       https://github.com/NVIDIA/cutlass.git /opt/cutlass
+--> Using cache c10170a5457a09742d8587173a45424f04ff6435007a44bd9d27582b6a3ef6d3
+--> c10170a5457a
+STEP 5/38: ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+--> Using cache 66a9386a24188909af18e18e33240e7bfd770082a229ea01c2b3e06817a68660
+--> 66a9386a2418
+STEP 6/38: RUN git clone --filter=blob:none       https://github.com/vllm-project/vllm.git /tmp/vllm-build &&     cd /tmp/vllm-build &&     git checkout f97ca6717
+--> Using cache e069574feb140670f62f607be3f2a384e5adafa91141b2b0c1e0b4f8e16bcd44
+--> e069574feb14
+STEP 7/38: WORKDIR /tmp/vllm-build
+--> Using cache 36cd6a86877e3d69f6354e8e7df55fa724f65c79e0cedfe8ba0dff0409cecd21
+--> 36cd6a86877e
+STEP 8/38: COPY marlin_sm12x.patch /tmp/
+--> Using cache 38551bd80293a2c65921a3573fa51fde067f4306cf907e1d229c64f09cd12a9e
+--> 38551bd80293
+STEP 9/38: RUN git apply /tmp/marlin_sm12x.patch || echo "Patch already applied or not needed"
+--> Using cache 1cdfe9557f8df2a3b9f5e7d1a328bc7428a8740c643e1c3b2c1178dbfd06144f
+--> 1cdfe9557f8d
+STEP 10/38: RUN python use_existing_torch.py
+--> Using cache ba95a8dfa490efbdd55f2f6b930e0f2a7fdeb5b5a5375a34531c4c7d20588e25
+--> ba95a8dfa490
+STEP 11/38: RUN pip install --no-cache-dir -r requirements/build.txt
+--> Using cache 338e9ae86b155ed9974ac485dd8fdfeb5de6fc2caa4060f3e05c6d2487acf44d
+--> 338e9ae86b15
+STEP 12/38: RUN pip uninstall -y vllm
+--> Using cache 58a7d6e1e442f197dbfabe31e0dd933dfccf530660c2afec743ddad8d2e2b843
+--> 58a7d6e1e442
+STEP 13/38: ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+--> Using cache ab4ecf9849ace1c59e13161b2aab40a5f674705aa0f6ee74f24853fb399c5178
+--> ab4ecf9849ac
+STEP 14/38: ENV VLLM_TARGET_DEVICE=cuda
+--> Using cache b4ba82599dc0f14ba5c5332a83f95e28341387b043bf219c0ea7c6ddc9309abc
+--> b4ba82599dc0
+STEP 15/38: ENV MAX_JOBS=16
+--> Using cache 97b7af0131c9540ff3c10f1fd81bd9d1e6f5c23df3cb509f74147aaf8911e621
+--> 97b7af0131c9
+STEP 16/38: RUN pip install --no-build-isolation --no-cache-dir .
+--> Using cache c04dba586e57e4b028f79f73a22496b604732f2a39b8b00815cdbbe3336febab
+--> c04dba586e57
+STEP 17/38: WORKDIR /
+--> Using cache d97ac33308d1eb6971201a992289a6887156f01bfb8c9b00bd03e5fa53cb79c0
+--> d97ac33308d1
+STEP 18/38: RUN rm -rf /tmp/vllm-build
+--> Using cache d54449cc0f75a8d7cec5dcf211f4cfc94bbab7863efaf4b5971ae37d89668607
+--> d54449cc0f75
+STEP 19/38: RUN pip install --no-cache-dir --no-deps "transformers>=5.0" &&     pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" &&     pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+--> Using cache 1d96090288fc7cdbdf02e2a05db5c37974fa17a9226bee0b33405ac3deeedd71
+--> 1d96090288fc
+STEP 20/38: RUN python3 -c "p = '/usr/local/lib/python3.12/dist-packages/torch/_inductor/config.py'; t = open(p).read(); old = 'install_config_module(sys.modules[__name__])'; new = 'assume_32bit_indexing = True\n\ninstall_config_module(sys.modules[__name__])'; t = t.replace(old, new, 1) if 'assume_32bit_indexing' not in t else t; open(p,'w').write(t); print('Patch 0: assume_32bit_indexing added' if 'assume_32bit_indexing' in open(p).read() else 'Patch 0: FAILED')"
+--> Using cache f8b15055d8c229d4393d18920e19d93807b1b778117d09868bad4339031f27d1
+--> f8b15055d8c2
+STEP 21/38: COPY patch_transformers.py /tmp/
+--> Using cache 0a682ff1d6010483e655c7b164b5e725516cf89f8b26591d423ff840c3957f78
+--> 0a682ff1d601
+STEP 22/38: RUN python3 /tmp/patch_transformers.py
+--> Using cache b5f308e8c39b83ea030c8055e8a1e48620046630f0ba97b89d9fbeeefa646d95
+--> b5f308e8c39b
+STEP 23/38: COPY patch_streaming.py /tmp/
+--> Using cache ca9fbcc94ad06f89fcdc6aca175da388a024ae29a39e0a96d7abce5cb81e8dd9
+--> ca9fbcc94ad0
+STEP 24/38: RUN python3 /tmp/patch_streaming.py
+--> Using cache f5ab57dc9c37eb90ec5c1eacdf63236453dd6f93a9a0b773489d9b7cc499a7c0
+--> f5ab57dc9c37
+STEP 25/38: COPY patch_mtp_nvfp4_exclusion.py /tmp/
+--> Using cache 82152c2b280acbc55ca4f7ce1534becb668ab8bd3cb8ab833438c405040b8cb3
+--> 82152c2b280a
+STEP 26/38: RUN python3 /tmp/patch_mtp_nvfp4_exclusion.py
+--> Using cache b5bd4e188e49e20485806ad3cdb1603b50bd8936ab79ff814cc29b7cd1fb5b20
+--> b5bd4e188e49
+STEP 27/38: COPY patch_uf17_eager_allreduce.py /tmp/
+--> Using cache 28c64f15dd0922f335a06d4cd6c8750ad25c940a821128bddb308085607789f4
+--> 28c64f15dd09
+STEP 28/38: RUN python3 /tmp/patch_uf17_eager_allreduce.py
+--> Using cache ee561291cbe15218bfa6713e1c3efef806e27457ee512058e9709d84d5d996a4
+--> ee561291cbe1
+STEP 29/38: RUN mkdir -p /opt/vllm
+--> Using cache 43fdaf210e5aa4724a349593a3f2f8ef4b958a1d6dac3397c0ae4713acdb58b3
+--> 43fdaf210e5a
+STEP 30/38: COPY serve_torchrun.py /opt/vllm/serve_torchrun.py
+--> Using cache f446a7aacb1a0ce5e6ebe23693b1014beff4bdcaf75c6a51403d5c3abfaeefaf
+--> f446a7aacb1a
+STEP 31/38: COPY uf19_rdma.cu /tmp/
+--> 420ceefe77be
+STEP 32/38: COPY uf19_rdma.py /tmp/
+--> 80d9eed817f3
+STEP 33/38: RUN nvcc -O2 -arch=sm_121 -shared -Xcompiler -fPIC     -o /opt/vllm/libuf19_rdma.so /tmp/uf19_rdma.cu     -L/usr/lib/aarch64-linux-gnu -libverbs -lpthread &&     cp /tmp/uf19_rdma.py /opt/vllm/uf19_rdma.py
+/tmp/uf19_rdma.cu(704): warning #940-D: missing return statement at end of non-void function "uf19_step"
+  }
+  ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/tmp/uf19_rdma.cu(704): warning #940-D: missing return statement at end of non-void function "uf19_step"
+  }
+  ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/tmp/uf19_rdma.cu(694): warning #550-D: variable "blocks" was set but never used
+      int blocks = (numel + 255) / 256;
+          ^
+
+/tmp/uf19_rdma.cu(695): warning #550-D: variable "s" was set but never used
+      cudaStream_t s = g_state.stream;
+                   ^
+
+/tmp/uf19_rdma.cu: In function 'int uf19_step(void*, void*, int)':
+/tmp/uf19_rdma.cu:702:11: warning: control reaches end of non-void function [-Wreturn-type]
+  702 |     cudaMemcpy(output_ptr, input_ptr, numel * sizeof(__nv_bfloat16),
+      |     ~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                      
+nvlink warning : Skipping incompatible '/usr/lib/aarch64-linux-gnu/libpthread.a' when searching for -lpthread
+--> ab60944135b4
+STEP 34/38: COPY patch_uf19_rdma_allreduce.py /tmp/
+--> 140f3e1bd6fb
+STEP 35/38: RUN python3 /tmp/patch_uf19_rdma_allreduce.py
+UF19: Patched parallel_state.py — ibverbs RDMA dispatch added
+UF19: Installed /opt/vllm/uf19_rdma.py
+UF19: Patched serve_torchrun.py — activation after warmup
+UF19: Done
+--> 0dfd784ef097
+STEP 36/38: RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+--> ed6e3d1ff121
+STEP 37/38: COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+--> 86e191a8afa7
+STEP 38/38: RUN python3 -c "import vllm; print('vLLM:', vllm.__version__); import transformers; print('transformers:', transformers.__version__); import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); import vllm.config.compilation; src = open(vllm.config.compilation.__file__).read(); assert 'VLLM_UF_EAGER_ALLREDUCE' in src, 'UF17 patch missing!'; print('UF17: EAGER_ALLREDUCE patch verified'); src = open('/usr/local/lib/python3.12/dist-packages/vllm/distributed/parallel_state.py').read(); assert 'uf19_rdma' in src, 'UF19 patch missing!'; print('UF19: ibverbs RDMA dispatch verified'); import os; assert os.path.exists('/opt/vllm/libuf19_rdma.so'), 'libuf19_rdma.so missing!'; print('UF19: libuf19_rdma.so installed'); assert os.path.exists('/opt/vllm/uf19_rdma.py'), 'uf19_rdma.py missing!'; print('UF19: uf19_rdma.py installed'); assert os.path.exists('/opt/vllm/serve_torchrun.py'); print('torchrun: serve_torchrun.py installed')"
+/usr/local/lib/python3.12/dist-packages/torchvision/io/image.py:14: UserWarning: Failed to load image Python extension: 'Could not load this library: /usr/local/lib/python3.12/dist-packages/torchvision/image.so'If you don't plan on using image functionality from `torchvision.io`, you can ignore this warning. Otherwise, there might be something wrong with your environment. Did you have `libjpeg` or `libpng` installed before building `torchvision` from source?
+  warn(
+vLLM: 0.15.2rc1.dev117+gf97ca6717.d20260303
+transformers: 5.2.0
+compressed_tensors: 0.13.0
+PyTorch: 2.10.0a0+a36e1d39eb.nvinternal.main.41386253
+CUDA: 13.1
+INFO 03-03 12:49:01 [importing.py:44] Triton is installed but 0 active driver(s) found (expected 1). Disabling Triton to prevent runtime errors.
+INFO 03-03 12:49:01 [importing.py:68] Triton not installed or not compatible; certain GPU-related functions will not be available.
+UF17: EAGER_ALLREDUCE patch verified
+UF19: ibverbs RDMA dispatch verified
+UF19: libuf19_rdma.so installed
+UF19: uf19_rdma.py installed
+torchrun: serve_torchrun.py installed
+COMMIT vllm-ng
+--> 201418ac179f
+Successfully tagged localhost/vllm-ng:latest
+201418ac179ffd66630db4e231e942d6953a1a92e7d4ed04c272dda183bbe82d

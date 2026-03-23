@@ -1,0 +1,75 @@
+STEP 1/27: FROM nvcr.io/nvidia/vllm:26.01-py3
+STEP 2/27: RUN apt-get update -qq &&     apt-get install -y --no-install-recommends wget &&     ARCH_DIR=$(dpkg --print-architecture | sed 's/arm64/sbsa/;s/amd64/x86_64/') &&     wget -qO /tmp/cuda-keyring.deb       "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/${ARCH_DIR}/cuda-keyring_1.1-1_all.deb" &&     dpkg -i /tmp/cuda-keyring.deb && rm /tmp/cuda-keyring.deb &&     apt-get update -qq &&     apt-get install -y --no-install-recommends       libcusparse-dev-13-1       libcusolver-dev-13-1       libcufft-dev-13-1 &&     rm -rf /var/lib/apt/lists/*
+--> Using cache af3748ba835a03c98f9bf59d0742e36ec7709c33186eb130c557f5ac0ffcd523
+--> af3748ba835a
+STEP 3/27: RUN pip install --no-cache-dir cmake ninja setuptools-scm
+--> Using cache d1a6ab32f002ff76676e382168685500824a6d5257e178080beac26efb6cae3a
+--> d1a6ab32f002
+STEP 4/27: RUN git clone --depth 1 --branch v4.3.5       https://github.com/NVIDIA/cutlass.git /opt/cutlass
+--> Using cache e9f63afaf947d6c53c5ca57e9f58a8abb7d47671f39d07b58f8ca744cb98ac57
+--> e9f63afaf947
+STEP 5/27: ENV VLLM_CUTLASS_SRC_DIR=/opt/cutlass
+--> Using cache c6045d719a49ea5af9e587cd3973db165ab89441e7159a628ede710ca0a1bbdb
+--> c6045d719a49
+STEP 6/27: RUN git clone --filter=blob:none       https://github.com/vllm-project/vllm.git /tmp/vllm-build &&     cd /tmp/vllm-build &&     git checkout f97ca6717
+--> Using cache 25847df1da593efeccd5aa5e2ae5f2f1c6952f13fb825347aff19f736c93770c
+--> 25847df1da59
+STEP 7/27: WORKDIR /tmp/vllm-build
+--> Using cache f23c3724914704d03761386b72b293f72c72a61ec67a86de3f0b7e4f8009a6e9
+--> f23c37249147
+STEP 8/27: COPY marlin_sm12x.patch /tmp/
+--> Using cache 5f5f9b4b7aae7e205ffeccb17b6a8edc90dfba8ed24e779158e87a8c8243c50e
+--> 5f5f9b4b7aae
+STEP 9/27: RUN git apply /tmp/marlin_sm12x.patch || echo "Patch already applied or not needed"
+--> Using cache 96ca5eb690e824e9ad754315dd2b24d8b11cc6b171aff718fcb773805ef42b0a
+--> 96ca5eb690e8
+STEP 10/27: RUN python use_existing_torch.py
+--> Using cache 1c40c5318f8e39c82f103d80faa382552d69470a2e849ef9647c96d8fcb4565d
+--> 1c40c5318f8e
+STEP 11/27: RUN pip install --no-cache-dir -r requirements/build.txt
+--> Using cache 4f6c13875bc2aa3828c500a9ce822395f9a2077c1ee049ebb73996835cad0e45
+--> 4f6c13875bc2
+STEP 12/27: RUN pip uninstall -y vllm
+--> Using cache c94e9cbda0f105acd21a2e84066b9143e53d5e63c89fc80473c777da24735f58
+--> c94e9cbda0f1
+STEP 13/27: ENV TORCH_CUDA_ARCH_LIST="12.0a;12.1a"
+--> Using cache 87a52ddbff350e76a60803fa7b884f4bfd40c555075bf7af7b90152120f0a666
+--> 87a52ddbff35
+STEP 14/27: ENV VLLM_TARGET_DEVICE=cuda
+--> Using cache 65ce5224e331db2613d2622d6be312968f17759286618ee3ee0a74a55323f768
+--> 65ce5224e331
+STEP 15/27: ENV MAX_JOBS=16
+--> Using cache 5cc9d0ec16eb0fc2bed9c6d7026851ee32e87a346843be42224bcf9acaf1ac6c
+--> 5cc9d0ec16eb
+STEP 16/27: RUN pip install --no-build-isolation --no-cache-dir .
+--> Using cache 4107d3842e66a421fac7413a2c4fc27147889149b6ae36e16820ef0dbac65678
+--> 4107d3842e66
+STEP 17/27: WORKDIR /
+--> Using cache 11d62df4e9429befc1fb486a1e91a2d1c46f1101d66101936e1a413d1427ef79
+--> 11d62df4e942
+STEP 18/27: RUN rm -rf /tmp/vllm-build
+--> Using cache 1cdb6c00a2f4d8a0fb8a064eee4fe0c69449dbd5f62301996f5abc0f1c9b7090
+--> 1cdb6c00a2f4
+STEP 19/27: RUN pip install --no-cache-dir --no-deps "transformers>=5.0" &&     pip install --no-cache-dir --upgrade "huggingface_hub>=0.32" &&     pip install --no-cache-dir --no-deps "compressed-tensors>=0.13"
+--> Using cache 0b655a98243e3fb8d229ec4fac90cc04808726b93a0549d09a45d9fd2f61f933
+--> 0b655a98243e
+STEP 20/27: RUN python3 -c "p = '/usr/local/lib/python3.12/dist-packages/torch/_inductor/config.py'; t = open(p).read(); old = 'install_config_module(sys.modules[__name__])'; new = 'assume_32bit_indexing = True\n\ninstall_config_module(sys.modules[__name__])'; t = t.replace(old, new, 1) if 'assume_32bit_indexing' not in t else t; open(p,'w').write(t); print('Patch 0: assume_32bit_indexing added' if 'assume_32bit_indexing' in open(p).read() else 'Patch 0: FAILED')"
+--> Using cache f0d200c9a0f15cb251798a0d549e246c362a89fcf93e0e6681d54c48c22ab823
+--> f0d200c9a0f1
+STEP 21/27: COPY patch_transformers.py /tmp/
+--> Using cache 2586cbffd5fea1a4c6f0cd6475b38dc1226d6ba032fad65fe8d89f887e4a7ea8
+--> 2586cbffd5fe
+STEP 22/27: RUN python3 /tmp/patch_transformers.py
+--> Using cache 807f40c7328fd6ecc799753a273ba0584c816243c2c02245b1e9855401f550bf
+--> 807f40c7328f
+STEP 23/27: COPY patch_streaming.py /tmp/
+--> Using cache 332fb94f23e579a8efd180423c93c3111176a691b2c8f88b544eaae0256f2a4f
+--> 332fb94f23e5
+STEP 24/27: RUN python3 /tmp/patch_streaming.py
+--> Using cache 012fcc364b2d845d8cedb62c3f4536a7703ea2bd2205c719e11faf5a7c5dc2d6
+--> 012fcc364b2d
+STEP 25/27: RUN rm -rf /usr/local/lib/python3.12/dist-packages/cv2/typing 2>/dev/null || true
+--> a6626fcc85b9
+STEP 26/27: COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/configs/
+--> 66842d4eb985
+STEP 27/27: RUN python3 -c "import vllm; print('vLLM:', vllm.__version__); import transformers; print('transformers:', transformers.__version__); import compressed_tensors; print('compressed_tensors:', compressed_tensors.__version__); import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda)"

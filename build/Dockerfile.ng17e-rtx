@@ -98,8 +98,10 @@ RUN pip install --no-cache-dir -r requirements/build.txt
 RUN pip uninstall -y vllm
 
 # Triton Kernels — pre-downloaded (Spiegel 2 TLS bug workaround)
+# Patch cmake to use local source instead of git clone
 COPY triton-v3.6.0/ /opt/triton-kernels-src/
-ENV FETCHCONTENT_SOURCE_DIR_TRITON_KERNELS=/opt/triton-kernels-src
+RUN sed -i 's|GIT_REPOSITORY.*triton.*|SOURCE_DIR /opt/triton-kernels-src|;s|GIT_TAG.*||' \
+    cmake/external_projects/triton_kernels.cmake || echo "triton cmake patch: n/a"
 
 # vLLM bauen mit CUTLASS fuer SM120a
 ENV TORCH_CUDA_ARCH_LIST="12.0a"
@@ -208,6 +210,7 @@ COPY moe-configs/*.json /usr/local/lib/python3.12/dist-packages/vllm/model_execu
 # Runtime env defaults (UMA-optimiert, eugr)
 # ============================================================
 ENV FLASHINFER_CUDA_ARCH_LIST="12.0a"
+ENV FLASHINFER_DISABLE_VERSION_CHECK=1
 ENV RAY_memory_monitor_refresh_ms=0
 ENV RAY_object_store_memory=1073741824
 ENV RAY_num_prestart_python_workers=0
